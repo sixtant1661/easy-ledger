@@ -6,13 +6,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.easyledger.app.data.local.*
@@ -37,8 +40,11 @@ fun TextField(label: String, value: String, onChange: (String) -> Unit, decimal:
 
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit, label: String) {
+    val focus = LocalFocusManager.current
     OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true,
-        trailingIcon = { if (value.isNotEmpty()) TextButton({ onChange("") }) { Text("清空") } })
+        trailingIcon = { if (value.isNotEmpty()) TextButton({ onChange("") }) { Text("清空") } },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }))
 }
 
 @Composable

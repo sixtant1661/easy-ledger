@@ -43,8 +43,9 @@ class LedgerUiTest {
         rule.waitUntil(10_000) { rule.onAllNodesWithText("新增工作记录").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("历史记录").performScrollTo().performClick()
         rule.onNodeWithText("搜索项目名称或记录备注").performTextInput("合成测试备注")
-        rule.waitUntil(10_000) { rule.onAllNodesWithText(projectName).fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText(projectName).performClick()
+        rule.onNodeWithText("搜索项目名称或记录备注").performImeAction()
+        rule.onNodeWithTag("record_list").performScrollToNode(hasText(projectName))
+        rule.onNodeWithText(projectName).assertIsDisplayed().performClick()
         rule.onNodeWithText("修改记录").performScrollTo().performClick()
         rule.onNodeWithText("计费数量").performScrollTo().performTextReplacement("8")
         rule.onNodeWithText("核对并保存").performScrollTo().performClick()
@@ -55,6 +56,7 @@ class LedgerUiTest {
         rule.onNodeWithText("删除记录").performScrollTo().performClick()
         rule.onNodeWithText("确认删除").performClick()
         rule.waitUntil(10_000) { rule.onAllNodesWithText("没有找到记录").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("record_list").performScrollToNode(hasText("没有找到记录"))
         rule.onNodeWithText("没有找到记录").assertIsDisplayed()
     }
     @Test fun guideCanBeReplayedAndCompletionSurvivesRecreation() {
