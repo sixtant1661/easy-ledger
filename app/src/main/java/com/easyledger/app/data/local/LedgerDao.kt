@@ -9,6 +9,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LedgerDao {
+    @Query("SELECT * FROM projects ORDER BY id") suspend fun exportProjects(): List<ProjectEntity>
+    @Query("SELECT * FROM work_records ORDER BY id") suspend fun exportRecords(): List<WorkRecordEntity>
+    @Query("SELECT * FROM work_segments ORDER BY recordId, position") suspend fun exportSegments(): List<WorkSegmentEntity>
+    @Query("SELECT * FROM work_segments ORDER BY recordId, position") fun observeSegments(): Flow<List<WorkSegmentEntity>>
+    @Query("SELECT * FROM preferences ORDER BY `key`") suspend fun exportPreferences(): List<PreferenceEntity>
+    @Query("SELECT * FROM work_segments WHERE recordId = :id ORDER BY position") suspend fun segments(id: String): List<WorkSegmentEntity>
+    @Query("DELETE FROM work_segments WHERE recordId = :id") suspend fun clearSegments(id: String)
+    @Insert suspend fun insertSegments(segments: List<WorkSegmentEntity>)
     @Query("""SELECT * FROM projects WHERE deletedAt IS NULL AND
         (:keyword = '' OR instr(lower(name), lower(:keyword)) > 0 OR instr(lower(note), lower(:keyword)) > 0)
         ORDER BY createdAt DESC, id""")

@@ -16,8 +16,11 @@ object Money {
         require(mode != BillingMode.HOUR || value.scale() <= 2) { "计费小时最多保留两位小数" }
         return if (mode == BillingMode.HOUR) value.stripTrailingZeros() else value
     }
-    fun amount(quantity: String, price: String, mode: BillingMode): BigDecimal =
-        quantity(quantity, mode).multiply(decimal(price, "单价")).setScale(2, RoundingMode.HALF_UP)
+    fun price(text: String): BigDecimal = decimal(text, "单价").also {
+        require(it.scale() <= 2) { "单价最多保留两位小数；历史单价不自动修改" }
+    }
+    fun amount(quantity: String, price: String, mode: BillingMode, historicalPrice: String? = null): BigDecimal =
+        quantity(quantity, mode).multiply(if (price.trim() == historicalPrice) decimal(price, "历史单价") else price(price)).setScale(2, RoundingMode.HALF_UP)
     fun total(amounts: List<String>): String = amounts.fold(BigDecimal.ZERO) { sum, text -> sum + BigDecimal(text) }
         .setScale(2, RoundingMode.HALF_UP).toPlainString()
 }

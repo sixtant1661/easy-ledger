@@ -25,22 +25,22 @@ class LedgerDatabaseTest {
     @Before fun open() { db = LedgerDatabase.open(context, name); repository = LedgerRepository(db) }
     @After fun cleanup() { db.close(); context.deleteDatabase(name) }
     private suspend fun project(): String {
-        repository.saveProject(null, "桥梁施工", "运输 100%", BillingMode.DAY, "天", "3.335")
+        repository.saveProject(null, "桥梁施工", "运输 100%", BillingMode.DAY, "天", "3.33")
         return repository.projects("").first().first().id
     }
     @Test fun createEditSearchAndSoftDeletePreserveHistory() = runBlocking {
         val id = project()
-        repository.saveRecord(null, id, "2026-10-14", BillingMode.DAY, "天", "1", "3.335", "加班 100%")
+        repository.saveRecord(null, id, "2026-10-14", BillingMode.DAY, "天", "1", "3.33", "加班 100%")
         val record = repository.records("").first().single().record
-        assertEquals("3.34", record.amount)
+        assertEquals("3.33", record.amount)
         repository.saveProject(id, "新桥工程", "备注更新", BillingMode.HOUR, "小时", "99")
-        assertEquals("3.335", repository.records("").first().single().record.unitPrice)
+        assertEquals("3.33", repository.records("").first().single().record.unitPrice)
         assertEquals(1, repository.projects("备注更新").first().size)
         assertEquals(1, repository.records("新桥").first().size)
         assertEquals(1, repository.records("%").first().size)
         assertTrue(repository.records("不存在").first().isEmpty())
-        repository.saveRecord(record.id, id, "2026-10-15", BillingMode.DAY, "天", "2", "3.335", "修改后")
-        assertEquals("6.67", repository.records("").first().single().record.amount)
+        repository.saveRecord(record.id, id, "2026-10-15", BillingMode.DAY, "天", "2", "3.33", "修改后")
+        assertEquals("6.66", repository.records("").first().single().record.amount)
         repository.deleteProject(id)
         assertTrue(repository.projects("").first().isEmpty())
         assertEquals(1, repository.records("").first().size)

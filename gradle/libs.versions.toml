@@ -11,8 +11,12 @@ ksp = "2.1.20-2.0.1"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
+core = "1.15.0"
+desugar = "2.1.5"
 
 [libraries]
+androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
+desugar-jdk = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }

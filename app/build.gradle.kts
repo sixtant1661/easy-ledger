@@ -10,16 +10,33 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.easyledger.app"
+        // Separate identity: the original installed app and its records are left intact.
+        applicationId = "com.easyledger.app.recovery"
         // Provisional build floor only; product/device compatibility is not confirmed.
         minSdk = 23
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    signingConfigs {
+        if (System.getenv("EASY_LEDGER_KEYSTORE") != null) {
+            create("persistent") {
+                storeFile = file(System.getenv("EASY_LEDGER_KEYSTORE"))
+                storePassword = System.getenv("EASY_LEDGER_SIGNING_PASSWORD")
+                keyAlias = "easy-ledger"
+                keyPassword = System.getenv("EASY_LEDGER_SIGNING_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            if (System.getenv("EASY_LEDGER_KEYSTORE") != null) signingConfig = signingConfigs.getByName("persistent")
+        }
+    }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -29,6 +46,8 @@ android {
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk)
+    implementation(libs.androidx.core)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

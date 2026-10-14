@@ -13,3 +13,5 @@
 *.db-wal
 /backups/
 /screenshots/
+__pycache__/
+*.pyc
