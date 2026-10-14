@@ -55,6 +55,7 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/tests -v
           ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+          python3 scripts/check-instrumentation-contracts.py
       - name: Build the actual legacy 0.2 source in separate CI folder
         uses: actions/checkout@v4
         with:

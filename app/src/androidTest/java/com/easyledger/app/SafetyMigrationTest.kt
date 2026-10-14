@@ -11,7 +11,7 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class SafetyMigrationTest {
-    @Test fun importActualLegacyRunAsSnapshotIntoSeparateApp()=runBlocking {
+    @Test fun importActualLegacyRunAsSnapshotIntoSeparateApp(): Unit = runBlocking {
         val app=ApplicationProvider.getApplicationContext<LedgerApplication>()
         assertEquals("com.easyledger.app.recovery",app.packageName)
         val file=File(app.filesDir,"legacy-migration.json")
