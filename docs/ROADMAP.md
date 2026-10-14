@@ -27,7 +27,7 @@
 ./gradlew testDebugUnitTest
 ./gradlew lintDebug
 ./gradlew assembleDebug
-./gradlew connectedDebugAndroidTest
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest
 ```
 
 最后一项依赖可用设备/模拟器；无设备时明确报告未执行，不能以 JVM 测试替代 Room 和 UI 验收。APK 默认预期位置为 app/build/outputs/apk/debug/app-debug.apk，最终以实际构建产物为准。
@@ -81,3 +81,5 @@
 验收必须包含新增/编辑/删除、价格快照、金额/舍入、搜索、事务回滚、数据库文件重开、v1→v2 迁移、引导和 UI、同签名覆盖安装的数据保留。测试结果按实际执行记录至 BUILD_STATUS。API 36（Android 16）模拟器不能代替三星 Android 16 真机验收。
 
 下一优先项是可导出、校验、可回退的本地备份恢复，使用 SAF，不访问服务器。不将手机数据库、签名私钥或真实记录提交 Git。签名缓存失效拒绝更新包，固定发布密钥必须另行安全配置；卸载/清除数据会丢失记录。
+
+本轮已有成功 Actions：38502595051，5 个 JVM + 11 个 Android 16 测试，以及实际同签名覆盖安装 seed/verify 检查均通过。新增/编辑/删除、搜索和引导已实现。下一任务优先本地导出备份恢复和固定安全签名，之后再继续工时段与专业结算导出；不合并 PR #1，不发布正式版本。

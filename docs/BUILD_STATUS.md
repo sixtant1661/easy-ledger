@@ -1,4 +1,6 @@
-# 基础工程实际验证记录
+# 构建与测试验证记录
+
+## 0.1 基础工程（历史记录）
 
 ## 本次环境与执行
 
@@ -60,3 +62,19 @@ minSdk 23 为暂定技术构建下限；三星型号、Android/One UI 与产品�
 Actions 发布流程增加设备测试、报告和 Debug 签名缓存/指纹校验。旧框架测试包签名与新版不保证一致；0.2 开始固定测试签名，缓存丢失拒绝换签名构建更新。缓存不是长期安全密钥备份，正式使用前需要固定安全签名和业务备份恢复。
 
 首次 Actions 38499219161 的设备测试发现两倍字体下项目页固定头部挤压列表，导致空状态不可见。已修复为整个列表可滚动，并保留可见性断言。最终流程改为 API 36（Android 16）模拟器，等待重跑；本轮尚未交付未经设备验证的 APK。
+
+## 0.2 成功验证：Actions 38502595051
+
+运行：https://github.com/sixtant1661/easy-ledger/actions/runs/38502595051
+提交：61358fdcd2f844f5d9dfb32d1337fe9b2d540e62。API 36（Android 16）模拟器，非三星 One UI 硬件。
+
+- Gradle JVM：5 tests，0 failures，0 errors（HomeViewModel 2 + Money 3）。
+- connected Android：11 tests，0 failures，0 errors（Room 6 + UI/引导 2 + 导航 2 + 两倍字体 1）。
+- 覆盖安装：seed 1 test + force-stop + adb install -r + verify 1 test 均通过；真实已保存记录金额 50.00、引导完成状态未丢失。此项是同签名同版本覆盖安装，不冒称跨 APP 版本实机更新；数据库跨版本另由 v1→v2 迁移测试验证。
+- Debug APK、测试 APK、Lint 均成功。当前本地 Lint 0 issues；Actions 有第三方 Action Node 20 弃用提醒，不是应用编译错误。
+- `easy-ledger-debug-apk` 已上传（artifact 11866349380，ZIP 大小 10,487,004 字节，未过期）。报告 artifact 11866359080。
+- 成功包公开签名指纹已写入 `.github/debug-signing-cert.sha256`；下一次构建必须恢复相同签名，缓存丢失则拒绝输出换签名更新包。私钥没有提交或公开上传。
+
+首轮大字体失败及搜索键盘重排失败已修复，未禁用断言或跳过这些测试。所有 UI 核心测试最终执行通过。三星 S21 FE / Android 16 / One UI 8 的 0.1 基础界面由用户实机验证；0.2 新流程仍需用户手机验收。
+
+新功能是真实本地存储，不预填演示数据；批量补录、工时段输入、Excel/PDF/PNG、备份恢复未实现。应用没有网络/广泛存储权限，未接入账号、广告或采集 SDK。长期使用前优先备份恢复，卸载/清除数据会丢失记录。
