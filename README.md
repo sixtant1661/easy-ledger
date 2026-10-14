@@ -126,7 +126,7 @@ Debug 私钥不进入 Git；当前缓存路径问题导致成功包私钥未保�
 
 新固定私钥不入Git、不公开，存于私有目录及仓库Actions Secrets：`EASY_LEDGER_SIGNING_KEY_BASE64`、`EASY_LEDGER_SIGNING_PASSWORD`。缺Secret或证书不匹配不分发临时签名APK。原公开证书和新版公开证书分别保存；密钥缓存不再作为长期保障。两者不能互换。
 
-验证命令（本地Android16设备/模拟器另需实际连接）：
+验证命令（设备测试仅在无真实记录的合成模拟器运行；不得连接妈妈的手机执行 connectedDebugAndroidTest，Gradle 测试结束会卸载测试目标包）：
 
 ```bash
 python3 -m unittest discover -s scripts/tests -v

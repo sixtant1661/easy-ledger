@@ -21,7 +21,9 @@ object XlsxExporter {
                 "<c r=\"${('A'.code + c).toChar()}$index\" s=\"$style\" t=\"inlineStr\"><is><t xml:space=\"preserve\">${xml(text)}</t></is></c>"
             }.joinToString("") + "</row>"
             val body = buildString {
-                append(row(1, listOf("${doc.title} 工作结算单"), 32, 1)); append(row(2, listOf(doc.period), 28, 1)); append(row(3, doc.columns, 30, 2))
+                append(row(1, listOf("${doc.title} 工作结算单"), 32, 1)); append(row(2, listOf(doc.period), 28, 1)); val headerWidths=listOf(10,10,14,7,5,7,9,15)
+                val headerLines=doc.columns.mapIndexed { i,text -> (text.length+headerWidths[i]-1)/headerWidths[i] }.max().coerceAtLeast(1)
+                append(row(3, doc.columns, maxOf(30, headerLines*20+10), 2))
                 doc.rows.forEachIndexed { i, r ->
                     // Estimate Chinese glyph width and explicit lines; never use spaces for alignment.
                     val widths = listOf(10, 10, 14, 7, 5, 7, 9, 15)

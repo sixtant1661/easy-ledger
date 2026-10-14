@@ -17,6 +17,10 @@ RUNNER=NEW+'.test/androidx.test.runner.AndroidJUnitRunner'
 def adb(*args,data=None):
     return subprocess.run(['adb',*args],input=data,capture_output=True,check=True,timeout=120).stdout
 if adb('shell','getprop','ro.kernel.qemu').strip()!=b'1':raise SystemExit('Refusing: this test requires a synthetic Android emulator, not a phone.')
+# connectedDebugAndroidTest normally uninstalls its synthetic app/test packages after completion.
+# Reinstall BOTH new-package APKs here; this script is guarded to an emulator before any installs.
+adb('install','-r','app/build/outputs/apk/debug/app-debug.apk')
+adb('install','-r','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk')
 legacy=Path('legacy-source/app/build/outputs/apk/debug/app-debug.apk')
 if not legacy.is_file():raise SystemExit('Legacy source APK missing')
 adb('install','-r',str(legacy))
