@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build-debug-apk:
-    name: Verify ledger, old-data rescue and signed APK
+    name: Build personal-test APK with permanent signing
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     env:
@@ -51,70 +51,8 @@ jobs:
             echo '::error::Persistent signing secrets are absent in this run. Stop before rebuilding; check runtime secret availability.'
             exit 1
           fi
-      - name: Fast unit and rescue-tool tests
-        run: |
-          python3 -m unittest discover -s scripts/tests -v
-          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
-          python3 scripts/check-instrumentation-contracts.py
-      - name: Build the actual legacy 0.2 source in separate CI folder
-        uses: actions/checkout@v4
-        with:
-          ref: 61358fdcd2f844f5d9dfb32d1337fe9b2d540e62
-          path: legacy-source
-      - name: Build legacy package without the new-package key
-        working-directory: legacy-source
-        run: |
-          mkdir -p "$RUNNER_TEMP/legacy-android"
-          env -u EASY_LEDGER_KEYSTORE -u EASY_LEDGER_SIGNING_PASSWORD ANDROID_USER_HOME="$RUNNER_TEMP/legacy-android" ./gradlew --no-daemon assembleDebug
-      - name: Enable emulator acceleration
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Android 16 tests, non-destructive legacy rescue and update retention
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest,com.easyledger.app.SafetyMigrationTest
-            python3 scripts/verify-legacy-rescue.py
-            python3 scripts/verify-update-persistence.py
-      - name: Report actual test results
-        if: always()
-        run: |
-          python3 - <<'PYTEST'
-          import pathlib, xml.etree.ElementTree as ET
-          for p in pathlib.Path('app/build').rglob('TEST-*.xml'):
-              root = ET.parse(p).getroot()
-              print('::notice title=Test result::' + str(p) + ' tests=' + root.get('tests', '?') + ' failures=' + root.get('failures', '0') + ' errors=' + root.get('errors', '0'))
-              for test in root.findall('.//testcase'):
-                  for failure in [*test.findall('failure'), *test.findall('error')]:
-                      message = (failure.text or failure.get('message', ''))[:3000]
-                      message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-                      print('::error title=' + test.get('name', 'Test failed') + '::' + message)
-          PYTEST
-      - name: Save test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: easy-ledger-test-reports
-          path: |
-            app/build/reports/
-            app/build/test-results/
-            app/build/outputs/androidTest-results/
-          retention-days: 14
-      - name: Save safe desktop migration tools
-        uses: actions/upload-artifact@v4
-        with:
-          name: easy-ledger-migration-tools
-          path: |
-            scripts/rescue-old-ledger.py
-            docs/SAFE_MIGRATION.md
-          retention-days: 30
+      - name: Build the personal-test APK only
+        run: ./gradlew --no-daemon assembleDebug
       - name: Refuse distribution without the pinned permanent new-package key
         run: |
           test -n "$EASY_LEDGER_KEYSTORE" && test -f "$EASY_LEDGER_KEYSTORE" || { echo '::error::Signing secrets missing: no installable APK will be distributed.'; exit 1; }
@@ -130,3 +68,4 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+

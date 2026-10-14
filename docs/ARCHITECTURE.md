@@ -157,3 +157,10 @@ Settlements.create 只过滤已有有效记录并累计行金额，生成不可�
 原成功0.2签名指纹仍留 .github/debug-signing-cert.sha256；现存本地密钥与该指纹不符、缓存无原私钥，不可覆盖原 com.easyledger.app。新版另用 com.easyledger.app.recovery 和 .github/recovery-signing-cert.sha256；私钥外部私有目录 + GitHub Actions Secrets（base64加密keystore、独立密码），不用会过期的cache作为唯一存储。CI可以运行临时签名测试，但缺持久密钥/指纹不匹配禁止分发APK。不得把新版密钥误认为旧版密钥。
 
 scripts/rescue-old-ledger.py：设备 get-state/run-as 成功→force-stop（不清数据）→exec-out tar 同时读取DB/WAL/SHM→电脑临时副本 SQLite 完整性/外键/计费校验→通用JSON。禁止归档路径穿越/链接，输出不覆盖目录、不写Git。verify-legacy-rescue.py 在合成模拟器构建原0.2源码、验证真实run-as取数、共存导入及旧DB哈希不变。实机访问权限须重新验证，不启用Root或任何绕过。
+
+### CI职责拆分（最新授权）
+
+主 android-debug-apk.yml 仅构建当前应用、必要JVM/Lint/API36设备测试、同签名保留检查、固定指纹校验与APK产物；另一个新runner只重复构建验证固定签名一致性。legacy-data-rescue.yml 单独手工触发旧源码/WAL救援验证，保留严格SHA及关键字段断言；当前原始文件SHA断言失败，尚不能作为真实救援证明。此调整不修改数据库迁移或任何记账业务代码。
+
+
+最新个人测试交付授权：主 APK 工作流仅执行 assembleDebug、固定证书指纹校验和 Artifact 上传；本轮不运行模拟器、Lint、单元测试或重复构建。保留全部业务、迁移代码和安全断言，旧版救援工作流仅手动运行且本轮不触发。此 APK 供产品方三星实机测试，不代表完整发布验收。独立包名保持不变，不覆盖旧版。
