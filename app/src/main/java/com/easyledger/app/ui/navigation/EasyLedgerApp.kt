@@ -12,7 +12,16 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import com.easyledger.app.feature.ledger.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -26,6 +35,15 @@ import com.easyledger.app.feature.settings.SettingsScreen
 
 @Composable
 fun EasyLedgerApp() {
+    val model: LedgerViewModel = viewModel()
+    val onboarding by model.onboardingComplete.collectAsStateWithLifecycle()
+    val busy by model.busy.collectAsStateWithLifecycle()
+    val allProjects by model.allProjects.collectAsStateWithLifecycle()
+    val allRecords by model.allRecords.collectAsStateWithLifecycle()
+    var guideRequested by rememberSaveable { mutableStateOf(false) }
+    val showGuide = onboarding == false || guideRequested
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(model) { model.notices.collect { snackbar.showSnackbar(it) } }
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
@@ -37,12 +55,14 @@ fun EasyLedgerApp() {
         }
     }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            NavigationBar {
+            if (!showGuide && onboarding != null) NavigationBar {
                 Destination.entries.forEach { destination ->
                     NavigationBarItem(
                         modifier = Modifier.testTag("nav_${destination.route}"),
                         selected = currentRoute == destination.route,
+                        enabled = !busy,
                         onClick = { open(destination) },
                         icon = {
                             Icon(
@@ -60,10 +80,28 @@ fun EasyLedgerApp() {
             }
         },
     ) { padding ->
-        NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding)) {
-            composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize()) }
-            composable(Destination.PROJECTS.route) { ProjectsScreen(Modifier.fillMaxSize()) }
-            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize()) }
+        if (onboarding == null) { com.easyledger.app.ui.components.InformationCard("正在打开记账本", "请稍候，数据保存在手机本地。") }
+        else if (showGuide) { OnboardingScreen(model, { guideRequested = false }, Modifier.padding(padding).fillMaxSize()) }
+        else NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding).imePadding()) {
+            composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize(), onNewRecord = { navController.navigate("record/new") }, onHistory = { navController.navigate("history") }) }
+            composable(Destination.PROJECTS.route) { ProjectList(model, { navController.navigate("project/new") }, { navController.navigate("project/$it") }, Modifier.fillMaxSize()) }
+            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { guideRequested = true }) }
+            composable("history") { HistoryScreen(model, { navController.navigate("detail/$it") }, { navController.popBackStack() }, Modifier.fillMaxSize()) }
+            composable("project/{id}") { entry ->
+                val id = entry.arguments?.getString("id")
+                val project = allProjects.firstOrNull { it.id == id }
+                if (id == "new" || project != null) ProjectEditor(project, model, { navController.popBackStack() }, Modifier.fillMaxSize())
+            }
+            composable("record/{id}") { entry ->
+                val id = entry.arguments?.getString("id")
+                val record = allRecords.firstOrNull { it.record.id == id }?.record
+                if (id == "new" || record != null) RecordEditor(record, model, { navController.navigate("project/new") }, { navController.popBackStack() }, Modifier.fillMaxSize())
+            }
+            composable("detail/{id}") { entry ->
+                val id = entry.arguments?.getString("id")
+                val record = allRecords.firstOrNull { it.record.id == id }
+                if (record != null) RecordDetail(record, model, { navController.navigate("record/$id") }, { navController.popBackStack() }, Modifier.fillMaxSize())
+            }
         }
     }
 }

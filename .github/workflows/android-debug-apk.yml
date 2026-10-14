@@ -13,7 +13,7 @@ jobs:
   build-debug-apk:
     name: Build and upload Debug APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -35,8 +35,75 @@ jobs:
       - name: Install Android SDK 35
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
+      - name: Restore stable preview signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: easy-ledger-debug-signing-v1
+
+      - name: Protect existing preview signing identity
+        run: |
+          if test -f .github/debug-signing-cert.sha256 && ! test -f "$HOME/.android/debug.keystore"; then
+            echo "::error::Preview signing cache missing. Restore the original key; do not generate an incompatible update."
+            exit 1
+          fi
+
       - name: Build Debug APK with Gradle Wrapper
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+
+      - name: Check preview APK signing identity
+        run: |
+          fingerprint=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test -n "$fingerprint"
+          echo "::notice title=Debug signing fingerprint::$fingerprint"
+          if test -f .github/debug-signing-cert.sha256; then
+            expected=$(tr -d '\r\n' < .github/debug-signing-cert.sha256)
+            test "$fingerprint" = "$expected" || { echo "::error::Preview signing identity changed; refusing to distribute incompatible update."; exit 1; }
+          fi
+
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test Room, migration and UI on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest
+            python3 scripts/verify-update-persistence.py
+
+      - name: Report test failures
+        if: always()
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, xml.etree.ElementTree as ET
+          for p in pathlib.Path('app/build').rglob('TEST-*.xml'):
+              root = ET.parse(p).getroot()
+              print(str(p), root.attrib)
+              for test in root.findall('.//testcase'):
+                  for failure in [*test.findall('failure'), *test.findall('error')]:
+                      message = (failure.text or failure.get('message', ''))[:3000]
+                      message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                      print('::error title=' + test.get('name', 'Test failed') + '::' + message)
+          PYTEST
+
+      - name: Save test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: easy-ledger-test-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+          retention-days: 14
 
       - name: Save downloadable APK
         uses: actions/upload-artifact@v4
