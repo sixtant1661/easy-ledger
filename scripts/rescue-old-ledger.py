@@ -78,7 +78,7 @@ def main():
         raise ValueError('不能把手机真实数据写入 Git 仓库')
     adb = [args.adb] + (['-s', args.serial] if args.serial else [])
     def call(*parts):
-        return subprocess.run(adb + list(parts), check=True, capture_output=True).stdout
+        return subprocess.run(adb + list(parts), check=True, capture_output=True, timeout=60).stdout
     # Explicit serial is required if multiple devices; adb itself safely rejects ambiguity.
     call('get-state')
     if call('shell', 'run-as', PACKAGE, 'id').strip() == b'':
@@ -109,9 +109,9 @@ def main():
 
 if __name__ == '__main__':
     try: main()
-    except (ValueError, subprocess.CalledProcessError, OSError, sqlite3.Error, tarfile.TarError) as exc:
+    except (ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, sqlite3.Error, tarfile.TarError) as exc:
         # Do not print database rows, paths from phone data, or raw adb output.
-        if isinstance(exc, subprocess.CalledProcessError):
+        if isinstance(exc, (subprocess.CalledProcessError,subprocess.TimeoutExpired)):
             print('USB/授权/run-as 读取失败，已停止。未卸载、未清除或改写手机数据库。')
         else: print(str(exc))
         raise SystemExit(1)

@@ -15,7 +15,7 @@ from test_rescue import fixture
 OLD='com.easyledger.app';NEW='com.easyledger.app.recovery'
 RUNNER=NEW+'.test/androidx.test.runner.AndroidJUnitRunner'
 def adb(*args,data=None):
-    return subprocess.run(['adb',*args],input=data,capture_output=True,check=True).stdout
+    return subprocess.run(['adb',*args],input=data,capture_output=True,check=True,timeout=120).stdout
 if adb('shell','getprop','ro.kernel.qemu').strip()!=b'1':raise SystemExit('Refusing: this test requires a synthetic Android emulator, not a phone.')
 legacy=Path('legacy-source/app/build/outputs/apk/debug/app-debug.apk')
 if not legacy.is_file():raise SystemExit('Legacy source APK missing')
@@ -31,19 +31,22 @@ with tempfile.TemporaryDirectory() as directory:
     try:
         for file in source.iterdir():
             if file.name.startswith('easy-ledger.db'):
-                adb('exec-out',f"run-as {OLD} sh -c 'cat > databases/{file.name}'",data=file.read_bytes())
+                adb('exec-in',f"run-as {OLD} sh -c 'cat > databases/{file.name}'",data=file.read_bytes())
     finally:db.close()
-    original=hashlib.sha256(adb('exec-out','run-as',OLD,'cat','databases/easy-ledger.db')).hexdigest()
+    names=['easy-ledger.db','easy-ledger.db-wal','easy-ledger.db-shm']
+    def original_hashes():
+        return {name:hashlib.sha256(adb('exec-out','run-as',OLD,'cat','databases/'+name)).hexdigest() for name in names}
+    original=original_hashes()
     output=source/'rescued'
     subprocess.run([sys.executable,'scripts/rescue-old-ledger.py','--output',str(output)],check=True)
     restored=json.loads(json.loads((output/'easy-ledger-backup.json').read_text())['payload'])
     assert restored['activeTotal']=='6.67' and restored['records'][0]['unitPrice']=='3.335'
     adb('shell','run-as',NEW,'mkdir','-p','files')
-    adb('exec-out',f"run-as {NEW} sh -c 'cat > files/legacy-migration.json'",data=(output/'easy-ledger-backup.json').read_bytes())
+    adb('exec-in',f"run-as {NEW} sh -c 'cat > files/legacy-migration.json'",data=(output/'easy-ledger-backup.json').read_bytes())
     result=adb('shell','am','instrument','-w','-e','class','com.easyledger.app.SafetyMigrationTest',RUNNER).decode()
     print(result)
     if 'OK (1 test)' not in result or 'FAILURES' in result:raise SystemExit('Legacy import verification failed')
-    after=hashlib.sha256(adb('exec-out','run-as',OLD,'cat','databases/easy-ledger.db')).hexdigest()
-    assert original==after,'Legacy DB was modified during recovery'
+    after=original_hashes()
+    assert original==after,'Legacy DB/WAL/SHM was modified during recovery'
     adb('shell','pm','path',OLD)
-print('::notice title=Legacy non-destructive rescue::Actual v0.2 debug package run-as allowed; DB+WAL extracted; historical price and amount imported; original app remained installed and DB unchanged. Emulator only, not Samsung hardware.')
+print('::notice title=Legacy non-destructive rescue::Actual v0.2 debug package run-as allowed; DB+WAL extracted; historical price and amount imported; original app remained installed and DB/WAL/SHM unchanged. Emulator only, not Samsung hardware.')

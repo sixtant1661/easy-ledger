@@ -103,6 +103,14 @@ jobs:
             app/build/test-results/
             app/build/outputs/androidTest-results/
           retention-days: 14
+      - name: Save safe desktop migration tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: easy-ledger-migration-tools
+          path: |
+            scripts/rescue-old-ledger.py
+            docs/SAFE_MIGRATION.md
+          retention-days: 30
       - name: Refuse distribution without the pinned permanent new-package key
         run: |
           test -n "$EASY_LEDGER_KEYSTORE" && test -f "$EASY_LEDGER_KEYSTORE" || { echo '::error::Signing secrets missing: no installable APK will be distributed.'; exit 1; }

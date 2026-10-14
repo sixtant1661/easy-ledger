@@ -72,6 +72,8 @@ class BackupAndTimeTest {
         repo.dao.insertRecord(WorkRecordEntity("legacy","p","2026-10-14","DAY","天","2","3.335","6.67","历史合成数据",1,1))
         val original=repo.backup();val restored=BackupCodec.decode(BackupCodec.encode(original))
         assertEquals("3.335",restored.records.single().unitPrice);assertEquals("6.67",restored.total)
+        repo.saveRecord("legacy","p","2026-10-14",BillingMode.DAY,"天","2","3.335","只改备注")
+        assertEquals("3.335",repo.dao.record("legacy")!!.unitPrice);assertEquals("6.67",repo.dao.record("legacy")!!.amount)
     }
     @Test fun corruptedBackupAndConflictingRestoreLeaveLocalDataUntouched()=runBlocking {
         val p=project();repo.saveRecord(null,p,"2026-10-14",BillingMode.DAY,"天","2","25","原始",draftId="r")

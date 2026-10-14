@@ -3,6 +3,7 @@ package com.easyledger.app.feature.tools
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -38,13 +39,17 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
     var end by rememberSaveable { mutableStateOf("") }
     var choice by remember { mutableStateOf(false) }
     var document by remember { mutableStateOf<Settlement?>(null) }
-    var pendingKind by remember { mutableStateOf("") }
+    var pendingKind by rememberSaveable { mutableStateOf("") }
     var pendingBackup by remember { mutableStateOf<String?>(null) }
+    var pendingFilePath by rememberSaveable { mutableStateOf("") }
     var lastSharedFile by remember { mutableStateOf<File?>(null) }
     var sharedImages by remember { mutableStateOf(emptyList<File>()) }
     var lastMime by remember { mutableStateOf("") }
     var columns by remember { mutableStateOf(defaultColumnNames) }
     var editingColumns by remember { mutableStateOf(false) }
+    var previewPage by rememberSaveable { mutableIntStateOf(0) }
+    BackHandler(enabled=busy) { /* Keep a transaction or file write from being abandoned. */ }
+    LaunchedEffect(project,start,end) { previewPage=0 }
     fun task(operation: suspend () -> String) {
         if (busy) return
         busy = true
@@ -67,14 +72,13 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
     val save = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode == Activity.RESULT_OK && uri != null) {
-            val kind = pendingKind; val snapshot = document; val backup = pendingBackup
+            val kind = pendingKind
             task {
+                require(kind in listOf("backup","xlsx","pdf","png")) { "保存状态已失效，请重新选择导出或备份" }
                 val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-                val file = File(dir, "easy-ledger-${java.util.UUID.randomUUID()}.${suffix(kind)}")
+                val file = File(pendingFilePath)
+                require(file.parentFile?.canonicalFile == dir.canonicalFile && file.isFile && file.length()>0) { "待保存文件已失效，请重新导出；原数据未改变" }
                 try {
-                    file.outputStream().use { output ->
-                        when(kind) { "backup" -> output.write(requireNotNull(backup).toByteArray(Charsets.UTF_8)); "xlsx" -> XlsxExporter.write(requireNotNull(snapshot), output); "pdf" -> PageExporter.pdf(requireNotNull(snapshot), output); "png" -> PageExporter.pngZip(requireNotNull(snapshot), output) }
-                    }
                     requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "无法写入所选位置" }.use { target -> file.inputStream().use { it.copyTo(target) } }
                     val images = if(kind == "png") buildList {
                         java.util.zip.ZipInputStream(file.inputStream()).use { zip ->
@@ -102,6 +106,17 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
                     require(start.isBlank() || end.isBlank() || start <= end) { "结束日期不能早于开始日期" }
                     document = Settlements.create(latest, project.ifBlank { null }, start.ifBlank { null }, end.ifBlank { null }, columns)
                 }
+                val prepared=withContext(Dispatchers.IO) {
+                    val dir=File(context.cacheDir,"exports").apply { mkdirs() }
+                    val file=File(dir,"easy-ledger-${java.util.UUID.randomUUID()}.${suffix(kind)}")
+                    try {
+                        file.outputStream().use { output ->
+                            when(kind) { "backup" -> output.write(requireNotNull(pendingBackup).toByteArray(Charsets.UTF_8)); "xlsx" -> XlsxExporter.write(requireNotNull(document),output); "pdf" -> PageExporter.pdf(requireNotNull(document),output); "png" -> PageExporter.pngZip(requireNotNull(document),output); else -> error("Unsupported output") }
+                        }
+                        require(file.length()>0) { "文件生成失败" };file
+                    } catch(e: Exception) { file.delete();throw e }
+                }
+                pendingFilePath=prepared.absolutePath
                 pendingKind = kind
                 save.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = mime(kind); putExtra(Intent.EXTRA_TITLE, "easy-ledger-${java.time.LocalDate.now()}.${suffix(kind)}") })
             } catch (e: Exception) { message = e.message ?: "准备文件失败，原数据未改变" }
@@ -120,7 +135,7 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
             "备份完整性和金额已校验，请核对后确认恢复。"
         }
     }
-    val preview = data?.let { runCatching { Settlements.create(it, project.ifBlank { null }, start.ifBlank { null }, end.ifBlank { null }, columns) }.getOrNull() }
+    val preview = remember(data,project,start,end,columns) { data?.let { runCatching { Settlements.create(it, project.ifBlank { null }, start.ifBlank { null }, end.ifBlank { null }, columns) }.getOrNull() } }
     PageContent(if(backupOnly) "备份与恢复" else "结算查询与导出", modifier) {
         if (!backupOnly) {
             Box {
@@ -146,7 +161,15 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
             MainButton("导出 Excel（XLSX）", !busy) { launchSave("xlsx") }
             MainButton("导出 PDF", !busy) { launchSave("pdf") }
             MainButton("导出 PNG 图片（ZIP）", !busy) { launchSave("png") }
-            preview?.rows?.forEach { row -> InformationCard("${row.cells[0]} · ${row.cells[1]}", row.cells.mapIndexed { i,v -> "${columns[i]}：${v.ifBlank { "无" }}" }.joinToString("\n")) }
+            if(preview != null && preview.rows.isNotEmpty()) {
+                val page=previewPage.coerceAtMost((preview.rows.size-1)/20)
+                Text("明细第 ${page+1} 页，共 ${(preview.rows.size+19)/20} 页；导出包含全部筛选结果。")
+                preview.rows.drop(page*20).take(20).forEach { row -> InformationCard("${row.cells[0]} · ${row.cells[1]}", row.cells.mapIndexed { i,v -> "${columns[i]}：${v.ifBlank { "无" }}" }.joinToString("\n")) }
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton({previewPage=page-1},Modifier.weight(1f).heightIn(min=56.dp),enabled=!busy && page>0){Text("上一页")}
+                    OutlinedButton({previewPage=page+1},Modifier.weight(1f).heightIn(min=56.dp),enabled=!busy && (page+1)*20<preview.rows.size){Text("下一页")}
+                }
+            }
         }
         MainButton("保存本地备份", !busy) { launchSave("backup") }
         MainButton("选择备份并恢复", !busy) { open.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }

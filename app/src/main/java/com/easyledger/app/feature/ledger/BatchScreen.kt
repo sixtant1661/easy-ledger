@@ -1,6 +1,8 @@
 package com.easyledger.app.feature.ledger
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,7 +62,7 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
         TextField("每天备注",note,{note=it})
         val allDates = runCatching { WorkTime.dates(start,end) }.getOrDefault(emptyList())
         allDates.forEach { day -> Row { Checkbox(day !in excluded && (!skipWeekend || LocalDate.parse(day).dayOfWeek.value<6),{checked ->
-            if(skipWeekend && LocalDate.parse(day).dayOfWeek.value>=6) skipWeekend=false
+            if(skipWeekend && LocalDate.parse(day).dayOfWeek.value>=6) { excluded=(excluded+allDates.filter { LocalDate.parse(it).dayOfWeek.value>=6 }).distinct();skipWeekend=false }
             excluded=if(checked) excluded-day else excluded+day
         });Text(day,Modifier.padding(top=12.dp)) } }
         val selected=dates.getOrDefault(emptyList())
@@ -72,8 +74,8 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
         val selected=dates.getOrThrow()
         val duplicates=records.count { it.record.projectId==projectId && it.record.date in selected }
         AlertDialog(onDismissRequest={if(!busy)preview=false},title={Text("确认保存 ${selected.size} 天？")},text={
-            Column(Modifier.heightIn(max=350.dp).then(Modifier)) {
-                Text("${selected.first()} 至 ${selected.last()}\n数量 $billed $unit/天，单价 $price 元\n合计 ${Money.total(List(selected.size) { amount.getOrThrow() })} 元\n已有 $duplicates 条同日记录，请核对日期勾选；同日多条允许。\n全部保存或全部取消，不会只保存一半。")
+            Column(Modifier.heightIn(max=350.dp).verticalScroll(rememberScrollState())) {
+                Text("${selected.first()} 至 ${selected.last()}\n数量 $billed $unit/天，单价 $price 元\n合计 ${Money.total(List(selected.size) { amount.getOrThrow() })} 元\n已有 $duplicates 条同日记录，请核对日期勾选；同日多条允许。\n全部保存或全部取消，不会只保存一半。\n保存日期：\n${selected.joinToString("\n")}")
             }
         },confirmButton={TextButton({model.saveBatch(projectId,selected,BillingMode.from(mode),unit,billed,price,note,spans,start,useTime,batchId){preview=false;onBack()}},enabled=!busy){Text("确认保存整批")}},dismissButton={TextButton({preview=false},enabled=!busy){Text("返回核对")}})
     }

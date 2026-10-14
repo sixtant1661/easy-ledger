@@ -53,7 +53,7 @@ fun EasyLedgerApp() {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
-    val editing = currentRoute?.startsWith("record/") == true || currentRoute?.startsWith("project/") == true || currentRoute == "batch" || currentRoute == "backup"
+    val editing = currentRoute?.startsWith("record/") == true || currentRoute?.startsWith("project/") == true || currentRoute == "batch" || currentRoute == "backup" || currentRoute == "settlement"
     fun open(destination: Destination) {
         navController.navigate(destination.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }

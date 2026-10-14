@@ -9,7 +9,7 @@ RUNNER = 'com.easyledger.app.recovery.test/androidx.test.runner.AndroidJUnitRunn
 
 
 def command(*args):
-    return subprocess.run(args, text=True, capture_output=True, check=True)
+    return subprocess.run(args, text=True, capture_output=True, check=True, timeout=120)
 
 
 def phase(name):
