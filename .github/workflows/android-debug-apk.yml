@@ -3,8 +3,7 @@ name: Android Debug APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - feature/android-foundation
+    branches: [feature/android-foundation]
 
 concurrency:
   group: android-debug-apk-${{ github.ref }}
@@ -15,78 +14,60 @@ permissions:
 
 jobs:
   build-debug-apk:
-    name: Build and upload Debug APK
+    name: Verify ledger, old-data rescue and signed APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
-      ANDROID_USER_HOME: ${{ runner.temp }}/easy-ledger-android
+      ANDROID_USER_HOME: /tmp/easy-ledger-android
+      EASY_LEDGER_SIGNING_PASSWORD: ${{ secrets.EASY_LEDGER_SIGNING_PASSWORD }}
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
-
-      - name: Prepare Android user folder
+      - name: Prepare Android folders
         run: mkdir -p "$ANDROID_USER_HOME"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: '13114758'
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
-
-      - name: Install Android SDK 35
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-
-      - name: Restore stable preview signing key
-        uses: actions/cache@v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore persistent NEW-package key from repository secrets
+        env:
+          KEY_BASE64: ${{ secrets.EASY_LEDGER_SIGNING_KEY_BASE64 }}
+        run: |
+          if test -n "$KEY_BASE64" && test -n "$EASY_LEDGER_SIGNING_PASSWORD"; then
+            mkdir -p "$RUNNER_TEMP/ledger-signing"
+            chmod 700 "$RUNNER_TEMP/ledger-signing"
+            printf '%s' "$KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/ledger-signing/ledger.jks"
+            chmod 600 "$RUNNER_TEMP/ledger-signing/ledger.jks"
+            echo "EASY_LEDGER_KEYSTORE=$RUNNER_TEMP/ledger-signing/ledger.jks" >> "$GITHUB_ENV"
+          else
+            echo '::warning::Persistent signing secrets absent: tests can run, downloadable APK distribution will be refused.'
+          fi
+      - name: Fast unit and rescue-tool tests
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+      - name: Build the actual legacy 0.2 source in separate CI folder
+        uses: actions/checkout@v4
         with:
-          path: ${{ env.ANDROID_USER_HOME }}/debug.keystore
-          key: easy-ledger-debug-signing-v2
-
-      - name: Diagnose signing location without exposing private keys
+          ref: 61358fdcd2f844f5d9dfb32d1337fe9b2d540e62
+          path: legacy-source
+      - name: Build legacy package without the new-package key
+        working-directory: legacy-source
         run: |
-          ./gradlew --no-daemon signingReport > "$RUNNER_TEMP/signing-report.txt"
-          python3 - <<'PYKEY'
-          import pathlib, os
-          for line in pathlib.Path(os.environ['RUNNER_TEMP'], 'signing-report.txt').read_text().splitlines():
-              if line.strip().startswith(('Store:', 'SHA-256:', 'Error:')):
-                  print('::notice title=Signing location diagnostic::' + line.strip())
-          PYKEY
-
-      - name: Protect existing preview signing identity
-        run: |
-          if test -f .github/debug-signing-cert.sha256 && ! test -f "$ANDROID_USER_HOME/debug.keystore"; then
-            echo "::error::Preview signing cache missing. Restore the original key; do not generate an incompatible update."
-            exit 1
-          fi
-
-      - name: Build Debug APK with Gradle Wrapper
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
-
-      - name: Check preview APK signing identity
-        run: |
-          fingerprint=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-          test -n "$fingerprint"
-          echo "::notice title=Debug signing fingerprint::$fingerprint"
-          if test -f .github/debug-signing-cert.sha256; then
-            expected=$(tr -d '\r\n' < .github/debug-signing-cert.sha256)
-            test "$fingerprint" = "$expected" || { echo "::error::Preview signing identity changed; refusing to distribute incompatible update."; exit 1; }
-          fi
-
+          mkdir -p "$RUNNER_TEMP/legacy-android"
+          env -u EASY_LEDGER_KEYSTORE -u EASY_LEDGER_SIGNING_PASSWORD ANDROID_USER_HOME="$RUNNER_TEMP/legacy-android" ./gradlew --no-daemon assembleDebug
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-
-      - name: Test Room, migration and UI on Android emulator
+      - name: Android 16 tests, non-destructive legacy rescue and update retention
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -95,17 +76,16 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest,com.easyledger.app.SafetyMigrationTest
+            python3 scripts/verify-legacy-rescue.py
             python3 scripts/verify-update-persistence.py
-
-      - name: Report test failures
+      - name: Report actual test results
         if: always()
         run: |
           python3 - <<'PYTEST'
           import pathlib, xml.etree.ElementTree as ET
           for p in pathlib.Path('app/build').rglob('TEST-*.xml'):
               root = ET.parse(p).getroot()
-              print(str(p), root.attrib)
               print('::notice title=Test result::' + str(p) + ' tests=' + root.get('tests', '?') + ' failures=' + root.get('failures', '0') + ' errors=' + root.get('errors', '0'))
               for test in root.findall('.//testcase'):
                   for failure in [*test.findall('failure'), *test.findall('error')]:
@@ -113,7 +93,6 @@ jobs:
                       message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
                       print('::error title=' + test.get('name', 'Test failed') + '::' + message)
           PYTEST
-
       - name: Save test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,8 +103,15 @@ jobs:
             app/build/test-results/
             app/build/outputs/androidTest-results/
           retention-days: 14
-
-      - name: Save downloadable APK
+      - name: Refuse distribution without the pinned permanent new-package key
+        run: |
+          test -n "$EASY_LEDGER_KEYSTORE" && test -f "$EASY_LEDGER_KEYSTORE" || { echo '::error::Signing secrets missing: no installable APK will be distributed.'; exit 1; }
+          actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          expected=$(tr -d '\r\n' < .github/recovery-signing-cert.sha256)
+          test "$actual" = "$expected" || { echo '::error::New-package signing fingerprint mismatch; distribution refused.'; exit 1; }
+          echo "::notice title=Stable NEW-package signing::$actual"
+          echo '::notice::This APK coexists with the legacy app. It CANNOT directly update the legacy signed package.'
+      - name: Save downloadable verified APK
         uses: actions/upload-artifact@v4
         with:
           name: easy-ledger-debug-apk

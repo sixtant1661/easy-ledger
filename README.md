@@ -115,3 +115,23 @@ Actions 运行 JVM 单元测试、lint、Debug 构建、API 36（Android 16）�
 Actions 38502595051：5 个 JVM 测试、11 个 Android 16 模拟器设备测试通过；数据库重开、v1→v2 迁移、事务回滚、价格快照、关键词、重复提交幂等、引导和两倍字体均已执行。另执行 seed 和 verify 各 1 个测试，真实关闭进程并 adb install -r 后，50.00 元记录与引导完成标记仍存在。具体记录见 BUILD_STATUS。
 
 Debug 私钥不进入 Git；当前缓存路径问题导致成功包私钥未保留，签名更新保障尚待解决。`.github/debug-signing-cert.sha256` 只保存公开证书指纹；缓存或指纹不匹配则构建失败。保留缓存不是永久密钥备份，长期发行仍需安全签名配置。
+
+## 0.3 集成功能与旧数据迁移
+
+本轮加入多时间段、跨午夜、自动分钟/小时与手动覆盖、逐日复制、批量模板、项目/日期结算筛选、XLSX/PDF/PNG、可操作的SAF备份恢复和系统分享。保留蓝色中文大字体UI、项目、搜索、新手引导、离线Room。小时数量及新单价最多两位；旧历史单价不自动改写。
+
+**旧0.2已有真实记录，不能直接覆盖升级。** 原成功包私钥未保存；新版包名 `com.easyledger.app.recovery`，名称“简单记账助手·新版”，用于保留旧APP的共存迁移。请先按 [安全迁移说明](docs/SAFE_MIGRATION.md) 实际取得并校验旧数据，不卸载、不清除、不绕过手机保护。新备份功能不代表旧版能自动导出。
+
+设置→备份与恢复，选择文件位置保存JSON，定期复制另一安全位置；恢复先预览有效条数和金额，校验校验和、外键、逐行金额及工时，冲突拒绝、不覆盖。备份明文，请私人保存；卸载/清除或丢失手机仍会丢失未备份数据。结算导出在首页，PNG为逐页图片ZIP；Excel超长单元格会提示而不静默裁剪，建议PDF/PNG。
+
+新固定私钥不入Git、不公开，存于私有目录及仓库Actions Secrets：`EASY_LEDGER_SIGNING_KEY_BASE64`、`EASY_LEDGER_SIGNING_PASSWORD`。缺Secret或证书不匹配不分发临时签名APK。原公开证书和新版公开证书分别保存；密钥缓存不再作为长期保障。两者不能互换。
+
+验证命令（本地Android16设备/模拟器另需实际连接）：
+
+```bash
+python3 -m unittest discover -s scripts/tests -v
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest,com.easyledger.app.SafetyMigrationTest
+```
+
+云本地构建用 `python3 scripts/cloud-build.py --stable-signing ...` 安全加载外部私钥；不要把密码写命令或日志。Actions集中验证Room/时间/备份/导出/UI/API36，并在纯模拟器测试原0.2取数共存导入和同签名覆盖安装。测试仅合成数据，真实手机不得运行模拟器fixture脚本。新增三星日期时间、微信分享和迁移须实机验收，不因模拟器通过而声称已在三星验证。

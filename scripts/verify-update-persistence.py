@@ -5,7 +5,7 @@ import subprocess
 APP = 'app/build/outputs/apk/debug/app-debug.apk'
 TEST = 'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
 CLASS = 'com.easyledger.app.UpdatePersistenceTest'
-RUNNER = 'com.easyledger.app.test/androidx.test.runner.AndroidJUnitRunner'
+RUNNER = 'com.easyledger.app.recovery.test/androidx.test.runner.AndroidJUnitRunner'
 
 
 def command(*args):
@@ -21,10 +21,11 @@ def phase(name):
         raise SystemExit(1)
 
 
+assert command('adb', 'shell', 'getprop', 'ro.kernel.qemu').stdout.strip() == '1', 'Emulator-only verification'
 command('adb', 'install', '-r', APP)
 command('adb', 'install', '-r', TEST)
 phase('seed')
-command('adb', 'shell', 'am', 'force-stop', 'com.easyledger.app')
+command('adb', 'shell', 'am', 'force-stop', 'com.easyledger.app.recovery')
 command('adb', 'install', '-r', APP)
 phase('verify')
 print('::notice title=APK update persistence::Seed and verify each executed one test; signed APK replacement retained saved record and onboarding preference.')

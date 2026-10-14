@@ -61,3 +61,15 @@ UI/ViewModel 不直接执行 SQL 或自行计算业务金额。领域计算保�
 Room 禁用破坏性迁移，项目和记录软删除，项目删除保留记录。设备测试使用合成数据和独立测试库；UpdatePersistenceTest 必须通过 scripts/verify-update-persistence.py 的 seed/verify 两阶段运行，常规 connected 测试用 notClass 排除它。发布测试 APK 之前，Actions 必须通过 JVM、lint、Room/迁移/UI 及同签名覆盖安装检查。
 
 Debug 测试签名不提交 Git、不上传公开附件。Actions 缓存保留 Debug keystore，公开证书指纹用于拒绝换签名更新；缓存丢失时构建失败，不自动换签名。缓存不是永久密钥保险箱，长期发布前需安全签名密钥和可导出的本地备份恢复。
+
+## 0.3 完整业务与旧版数据保护（2026-10-14 最新授权）
+
+已授权工时段、批量模板、结算筛选、XLSX/PDF/PNG、SAF 备份恢复与分享；保留现有 UI。总分钟/60 HALF_UP 两位，显式结束日期，小时数量两位，新单价两位。既有历史高精度单价不回写舍入：未改价的历史编辑、备份和恢复保留原快照；新建记录须满足新边界。一天计费仍手动。
+
+用户已在旧 0.2 APK 保存真实记录。原成功包私钥未保存且不能由证书恢复；禁止用新密钥宣称能覆盖 com.easyledger.app。新版包名 com.easyledger.app.recovery，与旧版共存；在手机旧数据读取、备份校验和导入验收前不指导卸载、清除、覆盖旧版。旧版 run-as 必须实际验证，不假定 USB 必然可读。禁止 Root、解锁引导程序。读被拒绝立即停止，不扩大权限。
+
+新版签名用仓库 Actions Secrets 和外部私有备份，公开证书单独钉住；没有密钥或指纹不匹配时 CI 不分发 APK。不得把私钥、密码、Base64 私钥提交 Git 或公开上传。Git 作者名 sixtant1661；邮箱使用用户本轮明确提供并经 API 验证的邮箱，不改写旧提交。
+
+scripts/verify-legacy-rescue.py 和 verify-update-persistence.py 仅能操作 ro.kernel.qemu=1 的合成模拟器；手机只能运行只读取数工具 rescue-old-ledger.py。临时数据库副本可回放 WAL，手机原数据库不写入。恢复按主键无冲突追加、相同数据幂等跳过；冲突整次回滚，不清库。导出内容统一不可变 Settlement，金额不重复舍入。
+
+开发按模块提交，集中推送以减少 Actions APK 频率；快编译/JVM 优先，设备/Lint/Actions 在阶段末集中运行。PR #1 不合并，不正式发布。真实手机迁移、三星分享/打印与备份位置须用户验收，自动化模拟器不能代替实机结论。

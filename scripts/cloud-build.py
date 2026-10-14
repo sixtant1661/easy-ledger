@@ -35,7 +35,14 @@ if proxy.hostname:
 # Wrapper bootstrap also needs proxy/trust settings before Gradle itself starts.
 environment["JAVA_OPTS"] = " ".join(options)
 # Pass Gradle JVM arguments separately, without shell interpolation of proxy metadata.
-args = sys.argv[1:] or ['testDebugUnitTest', 'lintDebug', 'assembleDebug', 'assembleDebugAndroidTest']
+args = sys.argv[1:]
+if '--stable-signing' in args:
+    import json
+    args.remove('--stable-signing')
+    private = Path('/workspace/easy-ledger-private/signing')
+    environment['EASY_LEDGER_KEYSTORE'] = str(private / 'easy-ledger-recovery.jks')
+    environment['EASY_LEDGER_SIGNING_PASSWORD'] = json.loads((private / 'credentials.json').read_text())['password']
+args = args or ['testDebugUnitTest', 'lintDebug', 'assembleDebug', 'assembleDebugAndroidTest']
 result = subprocess.run([str(root / 'gradlew'), '--no-daemon', *options, *args, '--console=plain'],
                         cwd=root, env=environment)
 sys.exit(result.returncode)

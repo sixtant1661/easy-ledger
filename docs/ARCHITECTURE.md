@@ -143,3 +143,17 @@ JVM：区间合计、跨午夜、嵌套重叠、相接、非法区间、手动�
 验收必须包含新增/编辑/删除、价格快照、金额/舍入、搜索、事务回滚、数据库文件重开、v1→v2 迁移、引导和 UI、同签名覆盖安装的数据保留。测试结果按实际执行记录至 BUILD_STATUS。API 36（Android 16）模拟器不能代替三星 Android 16 真机验收。
 
 下一优先项是可导出、校验、可回退的本地备份恢复，使用 SAF，不访问服务器。不将手机数据库、签名私钥或真实记录提交 Git。签名缓存失效拒绝更新包，固定发布密钥必须另行安全配置；卸载/清除数据会丢失记录。
+
+## 0.3 数据保护、时间、导出与签名
+
+保留 Room schema version2 和既有四表，不改变任何历史字段/数据库名称；工时写入已预留 work_segments 及 actualMinutes/quantitySource。版本2升级到新业务层不需要清表；1→2仍显式迁移。记录+时段、整批、备份快照和恢复均 withTransaction。单价修改不追溯；新建价格两位，已有更高精度价格仅在值未变时保留历史计费依据。
+
+WorkTime 是纯 Kotlin 整分钟与 LocalDateTime 校验、跨日移动、分钟转小时和连续日期生成。Java time 通过 desugar_jdk_libs2.1.5 支持既有暂定 minSdk23。RecordEditor 的保存型状态区分原始时间段、自动/手动计费，日期修改移动全部段并保留跨日偏移。批量 ID+日期用于重试幂等，不靠同日禁止重复。
+
+LedgerBackup 为完整实体快照；BackupCodec 使用版本化 JSON envelope（payload字符串 + SHA256），最大32MB，先校验后事务无冲突追加。SHA256只检查完整性，不能防有意篡改。保留原始精度、主键和时间戳；冲突不做隐式 last-write-wins。SAF 读写由 IO 执行，用户确认恢复；外部存储无需全盘权限。分享仅 exports 缓存子目录的 FileProvider content URI，临时读权限，不暴露文件路径。
+
+Settlements.create 只过滤已有有效记录并累计行金额，生成不可变列名/单元格/总额快照。XlsxExporter 最小标准OOXML Zip：inlineStr 防备注变公式，显式行高/宽/边框/居中/wrap/打印。PageExporter 共用测量换行/分页/Canvas，在PDF与PNG输出同样单元格，不再算金额。大量结算与复杂原始Excel样式仍须实际样表验收。
+
+原成功0.2签名指纹仍留 .github/debug-signing-cert.sha256；现存本地密钥与该指纹不符、缓存无原私钥，不可覆盖原 com.easyledger.app。新版另用 com.easyledger.app.recovery 和 .github/recovery-signing-cert.sha256；私钥外部私有目录 + GitHub Actions Secrets（base64加密keystore、独立密码），不用会过期的cache作为唯一存储。CI可以运行临时签名测试，但缺持久密钥/指纹不匹配禁止分发APK。不得把新版密钥误认为旧版密钥。
+
+scripts/rescue-old-ledger.py：设备 get-state/run-as 成功→force-stop（不清数据）→exec-out tar 同时读取DB/WAL/SHM→电脑临时副本 SQLite 完整性/外键/计费校验→通用JSON。禁止归档路径穿越/链接，输出不覆盖目录、不写Git。verify-legacy-rescue.py 在合成模拟器构建原0.2源码、验证真实run-as取数、共存导入及旧DB哈希不变。实机访问权限须重新验证，不启用Root或任何绕过。
