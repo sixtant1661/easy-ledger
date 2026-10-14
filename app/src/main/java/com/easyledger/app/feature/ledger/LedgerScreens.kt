@@ -85,19 +85,20 @@ fun ProjectList(model: LedgerViewModel, onCreate: () -> Unit, onEdit: (String) -
     val busy by model.busy.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<ProjectEntity?>(null) }
     LazyColumn(modifier.testTag("project_list").padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text("项目列表", style = MaterialTheme.typography.headlineMedium) }
+        item { Text("项目管理", style = MaterialTheme.typography.headlineMedium) }
         item { SearchField(keyword, { model.projectSearch.value = it }, "搜索项目名称或备注") }
-        item { MainButton("创建项目", !busy, onCreate) }
+        item { TextButton(onCreate,Modifier.fillMaxWidth().heightIn(min=48.dp),enabled=!busy) { Text("＋ 创建项目") } }
             if (projects.isEmpty()) item { InformationCard(if (keyword.isBlank()) "暂无项目" else "没有找到项目", "可以创建项目，或清空关键词再试一次。") }
             items(projects, key = { it.id }) { project ->
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Card(onClick={onEdit(project.id)},modifier=Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(project.name, style = MaterialTheme.typography.titleMedium)
-                        Text("累计 ${Money.total(records.filter { it.record.projectId == project.id }.map { it.record.amount })} 元")
                         Text("${BillingMode.from(project.defaultMode).label} · ${project.defaultPrice} 元/${project.defaultUnit}")
-                        if (project.note.isNotEmpty()) Text(project.note)
-                        OutlinedButton({ onEdit(project.id) }, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("修改项目") }
-                        TextButton({ deleting = project }, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("删除项目") }
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+                            Text("›",Modifier.padding(12.dp))
+                            var menu by remember { mutableStateOf(false) }
+                            Box { TextButton({menu=true}) { Text("⋯") };DropdownMenu(menu,{menu=false}) { DropdownMenuItem({Text("删除项目")},{menu=false;deleting=project}) } }
+                        }
                     }
                 }
             }
@@ -165,9 +166,11 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
     var quantity by rememberSaveable { mutableStateOf(record?.quantity ?: "") }
     var price by rememberSaveable { mutableStateOf(record?.unitPrice ?: "") }
     var note by rememberSaveable { mutableStateOf(record?.note ?: "") }
-    var savedSpans by rememberSaveable { mutableStateOf(initialSpans.map { it.start + "|" + it.end }) }
+    var savedSpans by rememberSaveable { mutableStateOf(if(record==null && initialSpans.isEmpty()) listOf("${date}T07:00|${date}T11:00","${date}T13:00|${date}T17:00") else initialSpans.map { it.start + "|" + it.end }) }
     val spans = savedSpans.map { TimeSpan(it.substringBefore("|"), it.substringAfter("|")) }
-    var useTime by rememberSaveable { mutableStateOf(record?.quantitySource == "TIME") }
+    var useTime by rememberSaveable { mutableStateOf(record == null || record.quantitySource == "TIME") }
+    var defaultsExpanded by rememberSaveable { mutableStateOf(false) }
+    var timeExpanded by rememberSaveable { mutableStateOf(true) }
     val timeResult = runCatching { WorkTime.minutes(date, spans) }
     val billed = if(useTime && spans.isNotEmpty() && timeResult.isSuccess) WorkTime.hours(timeResult.getOrThrow()) else quantity
     fun changeDate(next: String) { savedSpans = WorkTime.shift(spans,date,next).map { it.start + "|" + it.end }; date=next }
@@ -184,9 +187,10 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
     val amount = calculation.getOrNull()
     fun choose(p: ProjectEntity) {
         projectId = p.id
-        if (record == null) { mode = p.defaultMode; unit = p.defaultUnit; price = p.defaultPrice }
+        if (record == null) { mode = p.defaultMode; unit = p.defaultUnit; price = p.defaultPrice;useTime=mode==BillingMode.HOUR.name }
         chooseProject = false
     }
+    LaunchedEffect(available.map { it.id }) { if(projectId.isBlank() && available.isNotEmpty()) choose(available.first()) }
     PageContent(if (record == null) "新增工作记录" else "修改工作记录", modifier) {
         if (available.isEmpty()) {
             InformationCard("请先创建项目", "工作记录需要归属于一个项目。创建项目后再回来填写。")
@@ -211,28 +215,31 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
                 TextButton({ val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }; changeDate(SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(c.time)) }, Modifier.weight(1f).heightIn(min = 56.dp)) { Text(label) }
             }
         }
-        if(record == null) OutlinedButton({
-            val previousDate=java.time.LocalDate.parse(date).minusDays(1).toString()
-            val previous=allRecords.firstOrNull { it.record.projectId==projectId && it.record.date==previousDate }?.record
-            if(previous != null) {
-                mode=previous.mode;unit=previous.unit;quantity=previous.quantity;price=previous.unitPrice;note=previous.note;useTime=previous.quantitySource=="TIME"
-                savedSpans=WorkTime.shift(allSegments.orEmpty().filter { it.recordId==previous.id }.map { TimeSpan(it.startDateTime,it.endDateTime) },previous.date,date).map { it.start+"|"+it.end }
-            }
-        }, Modifier.fillMaxWidth().heightIn(min=56.dp), enabled=allRecords.any { it.record.projectId==projectId && it.record.date==java.time.LocalDate.parse(date).minusDays(1).toString() }) { Text("复制上一天最近一条记录（保存前核对）") }
-        ModePicker(BillingMode.from(mode)) { mode = it.name; unit = it.unit; if(it != BillingMode.HOUR) useTime=false }
-        TimeInputs(date, spans) { next -> savedSpans=next.map { it.start+"|"+it.end }; if(next.isEmpty()) useTime=false }
-        if(spans.isNotEmpty()) {
-            InformationCard("实际工作时长", timeResult.getOrNull()?.let { "$it 分钟 · ${WorkTime.hours(it)} 小时" } ?: timeResult.exceptionOrNull()?.message.orEmpty())
-            if(mode == BillingMode.HOUR.name) Row { Checkbox(useTime,{ useTime=it }); Text("按时间自动计算计费小时", Modifier.padding(top=12.dp)) }
+        TextButton({timeExpanded=!timeExpanded},Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("◷ 工作时间 ${if(timeExpanded) "⌃" else "⌄"}") }
+        if(timeExpanded) {
+            TimeInputs(date, spans) { next -> savedSpans=next.map { it.start+"|"+it.end }; if(next.isEmpty()) useTime=false }
+            if(spans.isNotEmpty() && mode==BillingMode.HOUR.name) Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Checkbox(useTime,{useTime=it});Text("自动计算计费小时") }
+            if(timeResult.isFailure) Text(timeResult.exceptionOrNull()?.message.orEmpty(),color=MaterialTheme.colorScheme.error)
         }
-        TextField("单位", unit, { unit = it })
-        if(useTime) InformationCard("计费小时", "$billed 小时；取消自动计算后可手动调整。")
-        else TextField("计费数量", quantity, { quantity = it }, decimal = true)
-        TextField("单价（元）", price, { price = it }, decimal = true)
-        TextField("备注（可不填）", note, { note = it })
-        InformationCard("请核对金额", if (amount != null) "$amount 元" else "填写数量和单价后自动计算。${calculation.exceptionOrNull()?.message ?: ""}")
-        Text("实际工时和结算数量分别保存；按天计费不会自动换算工时。")
-        MainButton(if (busy) "正在保存…" else "核对并保存", !busy && amount != null && timeResult.isSuccess && projectId.isNotBlank() && unit.isNotBlank()) { confirmSave = true }
+        if(!useTime || mode!=BillingMode.HOUR.name) TextField("计费数量（$unit）",quantity,{quantity=it},true)
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Card(Modifier.weight(1f),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF5F1))) { Column(Modifier.padding(16.dp)) { Text("总工时");Text("${timeResult.getOrNull()?.let { WorkTime.hours(it) } ?: "—"} 小时",style=MaterialTheme.typography.titleLarge) } }
+            Card(Modifier.weight(1f),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF5F1))) { Column(Modifier.padding(16.dp)) { Text("金额（元）");Text(amount ?: "—",style=MaterialTheme.typography.titleLarge) } }
+        }
+        if(amount==null) Text(calculation.exceptionOrNull()?.message ?: "请填写数量和单价",color=MaterialTheme.colorScheme.error)
+        TextButton({defaultsExpanded=!defaultsExpanded},Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("⚙ 默认配置（单价 / 备注） ${if(defaultsExpanded) "⌃" else "⌄"}") }
+        if(defaultsExpanded) {
+            ModePicker(BillingMode.from(mode)) { mode=it.name;unit=it.unit;if(it!=BillingMode.HOUR)useTime=false }
+            TextField("单位",unit,{unit=it})
+            TextField("单价（元）",price,{price=it},true)
+            TextField("备注（可不填）",note,{note=it})
+            if(record==null) TextButton({
+                val previousDate=java.time.LocalDate.parse(date).minusDays(1).toString()
+                val previous=allRecords.firstOrNull { it.record.projectId==projectId && it.record.date==previousDate }?.record
+                if(previous!=null) { mode=previous.mode;unit=previous.unit;quantity=previous.quantity;price=previous.unitPrice;note=previous.note;useTime=previous.quantitySource=="TIME";savedSpans=WorkTime.shift(allSegments.orEmpty().filter { it.recordId==previous.id }.map { TimeSpan(it.startDateTime,it.endDateTime) },previous.date,date).map { it.start+"|"+it.end } }
+            }) { Text("复制上一天") }
+        }
+        MainButton(if (busy) "正在保存…" else "保存", !busy && amount != null && timeResult.isSuccess && projectId.isNotBlank() && unit.isNotBlank()) { confirmSave = true }
         OutlinedButton(exit, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("取消") }
     }
     if (confirmSave) AlertDialog(onDismissRequest = { if (!busy) confirmSave = false }, title = { Text("确认保存这条记录？") },

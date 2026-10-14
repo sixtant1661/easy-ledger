@@ -63,7 +63,7 @@ object PageExporter {
             cells.forEachIndexed { column, lines ->
                 val border = Paint().apply { color = Color.rgb(156,163,175); style = Paint.Style.STROKE; strokeWidth = 1f }
                 canvas.drawRect(x, y, x + widths[column], y + height, border)
-                lines.forEachIndexed { line, text -> canvas.drawText(text, x + 7, y + 24 + line * 24, paint) }
+                lines.forEachIndexed { line, text -> canvas.drawText(text, if(column in listOf(3,5,6)) x+widths[column]-7-paint.measureText(text) else x+7, y + 24 + line * 24, paint) }
                 x += widths[column]
             }
             y += height
@@ -80,11 +80,21 @@ object PageExporter {
         val pdf = PdfDocument()
         try {
             pages.forEachIndexed { i, rows ->
-                val page = pdf.startPage(PdfDocument.PageInfo.Builder(WIDTH, HEIGHT, i+1).create())
+                val page = pdf.startPage(PdfDocument.PageInfo.Builder(842, 595, i+1).create())
+                page.canvas.scale(842f/WIDTH,595f/HEIGHT)
                 draw(page.canvas, doc, rows, i, pages.size); pdf.finishPage(page)
             }
             pdf.writeTo(output)
         } finally { pdf.close() }
+    }
+    @Synchronized fun pngFiles(doc: Settlement, directory: java.io.File, baseName: String): List<java.io.File> {
+        val all=pages(doc)
+        return all.mapIndexed { i,rows ->
+            val file=java.io.File(directory, if(all.size==1) "$baseName.png" else "${baseName}_第${i+1}页.png")
+            val bitmap=createBitmap(WIDTH,HEIGHT,Bitmap.Config.ARGB_8888)
+            try { draw(Canvas(bitmap),doc,rows,i,all.size);file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG,100,it)) { "图片生成失败" } };file }
+            finally {bitmap.recycle()}
+        }
     }
     @Synchronized fun pngZip(doc: Settlement, output: OutputStream) {
         val pages = pages(doc)

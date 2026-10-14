@@ -4,7 +4,7 @@ import com.easyledger.app.data.backup.LedgerBackup
 import com.easyledger.app.domain.calculation.Money
 import java.time.LocalDateTime
 
-val defaultColumnNames = listOf("日期", "业务名称", "工作时间", "时长或数量", "单位", "单价", "金额", "备注")
+val defaultColumnNames = listOf("日期", "机型", "工作时间", "时长或数量", "单位", "单价", "金额", "备注")
 data class SettlementRow(val cells: List<String>)
 data class Settlement(val title: String, val period: String, val columns: List<String>, val rows: List<SettlementRow>, val total: String)
 

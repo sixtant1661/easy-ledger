@@ -24,23 +24,18 @@ fun DateButton(label: String, date: String, onChange: (String) -> Unit) {
 @Composable
 fun TimeInputs(date: String, spans: List<TimeSpan>, onChange: (List<TimeSpan>) -> Unit) {
     val context = LocalContext.current
-    Text("工作时间段（可不填）", style=MaterialTheme.typography.titleMedium)
     spans.forEachIndexed { index, span ->
         val start = LocalDateTime.parse(span.start); val end = LocalDateTime.parse(span.end)
         fun replace(a: LocalDateTime = start, b: LocalDateTime = end) { onChange(spans.toMutableList().also { it[index] = TimeSpan(a.toString(), b.toString()) }) }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("第 ${index+1} 段")
-                OutlinedButton({ TimePickerDialog(context, { _, h,m -> replace(a=LocalDate.parse(date).atTime(h,m)) }, start.hour,start.minute,true).show() }, Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("开始：${start.toLocalTime()}") }
-                DateButton("结束日期", end.toLocalDate().toString()) { replace(b=LocalDate.parse(it).atTime(end.toLocalTime())) }
-                OutlinedButton({ TimePickerDialog(context, { _, h,m -> replace(b=end.toLocalDate().atTime(h,m)) }, end.hour,end.minute,true).show() }, Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("结束：${end.toLocalTime()}") }
-                TextButton({ onChange(spans.filterIndexed { i,_ -> i != index }) }, Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("删除第 ${index+1} 段") }
+        Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(2.dp)) {
+            TextButton({ TimePickerDialog(context,{_,h,m -> replace(a=LocalDate.parse(date).atTime(h,m))},start.hour,start.minute,true).show() },Modifier.weight(1f).heightIn(min=48.dp),contentPadding=PaddingValues(2.dp)) { Text("起 ${start.toLocalTime()}") }
+            TextButton({ TimePickerDialog(context,{_,h,m -> replace(b=end.toLocalDate().atTime(h,m))},end.hour,end.minute,true).show() },Modifier.weight(1f).heightIn(min=48.dp),contentPadding=PaddingValues(2.dp)) { Text("止 ${end.toLocalTime()}") }
+            Column(horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally) {
+                Checkbox(end.toLocalDate()!=start.toLocalDate(),{ next -> replace(b=LocalDate.parse(date).plusDays(if(next) 1 else 0).atTime(end.toLocalTime())) },Modifier.size(48.dp))
+                Text("次日",style=MaterialTheme.typography.bodySmall)
             }
+            TextButton({onChange(spans.filterIndexed { i,_ -> i!=index })},Modifier.width(48.dp),contentPadding=PaddingValues(0.dp)) { Text("×") }
         }
     }
-    OutlinedButton({
-        val day = LocalDate.parse(date)
-        onChange(spans + TimeSpan(day.atTime(7,0).toString(),day.atTime(11,0).toString()))
-    }, Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("添加工作时间段") }
-    if(spans.isNotEmpty()) Text("跨午夜请明确选择次日结束日期；首尾相接允许，重叠不能保存。")
+    TextButton({ val day=LocalDate.parse(date);onChange(spans+TimeSpan(day.atTime(7,0).toString(),day.atTime(11,0).toString())) },Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("⊕ 添加时间段") }
 }

@@ -10,16 +10,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 private val CorporateColors = lightColorScheme(
-    primary = Color(0xFF2563EB),
+    primary = Color(0xFF176D69),
     onPrimary = Color.White,
-    background = Color(0xFFF8FAFC),
-    onBackground = Color(0xFF111827),
+    background = Color(0xFFFFFDF7),
+    onBackground = Color(0xFF142F35),
     surface = Color.White,
-    onSurface = Color(0xFF111827),
-    onSurfaceVariant = Color(0xFF4B5563),
-    outline = Color(0xFFE5E7EB),
-    secondaryContainer = Color(0xFFEFF6FF),
-    onSecondaryContainer = Color(0xFF2563EB),
+    onSurface = Color(0xFF142F35),
+    onSurfaceVariant = Color(0xFF52666A),
+    outline = Color(0xFFE2EBE5),
+    secondaryContainer = Color(0xFFE7F4EF),
+    onSecondaryContainer = Color(0xFF176D69),
 )
 
 private val AccessibleTypography = Typography(
