@@ -13,8 +13,8 @@ object Money {
     fun quantity(text: String, mode: BillingMode): BigDecimal {
         val value = decimal(text, "数量")
         require(value.signum() > 0) { "数量必须大于 0" }
-        require(mode != BillingMode.HOUR || value.stripTrailingZeros().scale() <= 2) { "计费小时最多保留两位小数" }
-        return value
+        require(mode != BillingMode.HOUR || value.scale() <= 2) { "计费小时最多保留两位小数" }
+        return if (mode == BillingMode.HOUR) value.stripTrailingZeros() else value
     }
     fun amount(quantity: String, price: String, mode: BillingMode): BigDecimal =
         quantity(quantity, mode).multiply(decimal(price, "单价")).setScale(2, RoundingMode.HALF_UP)

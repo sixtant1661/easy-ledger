@@ -31,7 +31,7 @@ class LedgerUiTest {
         rule.onNodeWithText("项目名称").performTextInput(projectName)
         rule.onNodeWithText("默认单价（元）").performTextInput("20")
         rule.onNodeWithText("保存项目").performScrollTo().performClick()
-        rule.waitUntil(10_000) { rule.onAllNodesWithText(projectName).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("project_list").fetchSemanticsNodes().isNotEmpty() && rule.onAllNodesWithText(projectName).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("nav_home").performClick()
         rule.onNodeWithText("新增工作记录").performScrollTo().performClick()
         rule.onNodeWithText("项目：请选择 ▾").performClick()
@@ -43,6 +43,7 @@ class LedgerUiTest {
         rule.waitUntil(10_000) { rule.onAllNodesWithText("新增工作记录").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("历史记录").performScrollTo().performClick()
         rule.onNodeWithText("搜索项目名称或记录备注").performTextInput("合成测试备注")
+        rule.waitUntil(10_000) { rule.onAllNodesWithText(projectName).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(projectName).performClick()
         rule.onNodeWithText("修改记录").performScrollTo().performClick()
         rule.onNodeWithText("计费数量").performScrollTo().performTextReplacement("8")
@@ -65,6 +66,7 @@ class LedgerUiTest {
         rule.onNodeWithText("下一步").performClick()
         rule.onNodeWithText("下一步").performClick()
         rule.onNodeWithText("完成").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("nav_home").fetchSemanticsNodes().isNotEmpty() }
         rule.activityRule.scenario.recreate()
         rule.onNodeWithTag("nav_home").assertExists()
         rule.onNodeWithText("跳过").assertDoesNotExist()

@@ -24,5 +24,6 @@ class MoneyTest {
         assertThrows(IllegalArgumentException::class.java) { Money.amount("1", "-0.1", BillingMode.DAY) }
         assertThrows(IllegalArgumentException::class.java) { Money.amount("1.001", "2", BillingMode.HOUR) }
         assertEquals("2.00", Money.amount("1.00", "2", BillingMode.HOUR).toPlainString())
+        assertThrows(IllegalArgumentException::class.java) { Money.quantity("1.2300", BillingMode.HOUR) }
     }
 }

@@ -15,30 +15,30 @@ class LedgerRepository(private val db: LedgerDatabase) {
     val allProjects = dao.allProjects()
     val onboarding = dao.preference("onboarding_complete")
     suspend fun finishOnboarding() = dao.preference(PreferenceEntity("onboarding_complete", "true"))
-    suspend fun saveProject(id: String?, name: String, note: String, mode: BillingMode, unit: String, price: String) = db.withTransaction {
+    suspend fun saveProject(id: String?, name: String, note: String, mode: BillingMode, unit: String, price: String, draftId: String? = null) = db.withTransaction {
         require(name.trim().isNotEmpty()) { "请填写项目名称" }
         require(unit.trim().isNotEmpty()) { "请填写计费单位" }
         val decimal = Money.decimal(price, "单价").toPlainString()
         val now = System.currentTimeMillis()
-        val existing = id?.let { requireNotNull(dao.project(it)) { "项目已不存在" } }
+        val existing = if (id != null) requireNotNull(dao.project(id)) { "项目已不存在" } else draftId?.let { dao.project(it) }
         require(existing?.deletedAt == null) { "此项目已删除" }
-        val project = ProjectEntity(id ?: UUID.randomUUID().toString(), name.trim(), mode.name, unit.trim(), decimal,
+        val project = ProjectEntity(existing?.id ?: draftId ?: UUID.randomUUID().toString(), name.trim(), mode.name, unit.trim(), decimal,
             existing?.createdAt ?: now, now, note = note.trim())
         if (existing == null) dao.insertProject(project) else check(dao.updateProject(project) == 1)
     }
     suspend fun deleteProject(id: String) = db.withTransaction { check(dao.deleteProject(id, System.currentTimeMillis()) == 1) { "项目已删除或不存在" } }
-    suspend fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String) = db.withTransaction {
+    suspend fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String, draftId: String? = null) = db.withTransaction {
         val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
         val parsed = runCatching { parser.parse(date) }.getOrNull()
         require(parsed != null && parser.format(parsed) == date) { "请通过日历选择有效日期" }
         require(unit.trim().isNotEmpty()) { "请填写计费单位" }
-        val existing = id?.let { requireNotNull(dao.record(it)) { "记录已不存在" } }
+        val existing = if (id != null) requireNotNull(dao.record(id)) { "记录已不存在" } else draftId?.let { dao.record(it) }
         require(existing?.deletedAt == null) { "此记录已删除" }
         val project = requireNotNull(dao.project(projectId)) { "请选择项目" }
         require(project.deletedAt == null || existing?.projectId == projectId) { "此项目已删除，请选择其他项目" }
         val amount = Money.amount(quantity, price, mode).toPlainString()
         val now = System.currentTimeMillis()
-        val record = WorkRecordEntity(id ?: UUID.randomUUID().toString(), projectId, date, mode.name, unit.trim(),
+        val record = WorkRecordEntity(existing?.id ?: draftId ?: UUID.randomUUID().toString(), projectId, date, mode.name, unit.trim(),
             Money.quantity(quantity, mode).toPlainString(), Money.decimal(price, "单价").toPlainString(), amount, note.trim(),
             existing?.createdAt ?: now, now, actualMinutes = existing?.actualMinutes,
             quantitySource = "MANUAL", calculationPolicyVersion = existing?.calculationPolicyVersion ?: 1)

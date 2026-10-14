@@ -69,6 +69,13 @@ class LedgerDatabaseTest {
         assertNull(db.dao().project("rollback-project"))
         assertTrue(repository.records("").first().isEmpty())
     }
+    @Test fun retryingSameDraftUpdatesOneRecordInsteadOfDuplicating() = runBlocking {
+        val id = project()
+        repository.saveRecord(null, id, "2026-10-14", BillingMode.HOUR, "小时", "1", "20", "首次", draftId = "synthetic-draft")
+        repository.saveRecord(null, id, "2026-10-14", BillingMode.HOUR, "小时", "2", "20", "重试", draftId = "synthetic-draft")
+        assertEquals(1, repository.records("").first().size)
+        assertEquals("40.00", repository.records("").first().single().record.amount)
+    }
     @Test fun invalidRecordEditDoesNotChangeStoredRecord() = runBlocking {
         val id = project()
         repository.saveRecord(null, id, "2026-10-14", BillingMode.DAY, "天", "1", "5", "原记录")

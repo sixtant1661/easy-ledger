@@ -101,6 +101,7 @@ fun ProjectList(model: LedgerViewModel, onCreate: () -> Unit, onEdit: (String) -
 
 @Composable
 fun ProjectEditor(project: ProjectEntity?, model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val draftId = rememberSaveable { java.util.UUID.randomUUID().toString() }
     var name by rememberSaveable { mutableStateOf(project?.name ?: "") }
     var note by rememberSaveable { mutableStateOf(project?.note ?: "") }
     var mode by rememberSaveable { mutableStateOf(project?.defaultMode ?: BillingMode.HOUR.name) }
@@ -115,7 +116,7 @@ fun ProjectEditor(project: ProjectEntity?, model: LedgerViewModel, onBack: () ->
         TextField("默认单价（元）", price, { price = it }, decimal = true)
         TextField("项目备注（可不填）", note, { note = it })
         Text("默认单价只用于新记录，不会改变历史记录的单价。")
-        MainButton(if (busy) "正在保存…" else "保存项目", !busy) { model.saveProject(project?.id, name, note, BillingMode.from(mode), unit, price, onBack) }
+        MainButton(if (busy) "正在保存…" else "保存项目", !busy) { model.saveProject(project?.id, name, note, BillingMode.from(mode), unit, price, onBack, draftId) }
         OutlinedButton(exit, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("取消") }
     }
 }
@@ -149,6 +150,7 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
     val projects by model.allProjects.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
     val available = projects.filter { it.deletedAt == null || it.id == record?.projectId }
+    val draftId = rememberSaveable { java.util.UUID.randomUUID().toString() }
     var projectId by rememberSaveable { mutableStateOf(record?.projectId ?: "") }
     var date by rememberSaveable { mutableStateOf(record?.date ?: SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Calendar.getInstance().time)) }
     var mode by rememberSaveable { mutableStateOf(record?.mode ?: BillingMode.HOUR.name) }
@@ -207,7 +209,7 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
     }
     if (confirmSave) AlertDialog(onDismissRequest = { if (!busy) confirmSave = false }, title = { Text("确认保存这条记录？") },
         text = { Text("$date\n${available.firstOrNull { it.id == projectId }?.name ?: ""}\n数量 $quantity $unit\n单价 $price 元\n金额 $amount 元\n${if (duplicate) "提醒：已有同项目、日期、数量和单价的记录，可能重复，请核对。" else "同一天允许多条记录。"}") },
-        confirmButton = { TextButton({ model.saveRecord(record?.id, projectId, date, BillingMode.from(mode), unit, quantity, price, note) { confirmSave = false; onBack() } }, enabled = !busy) { Text("确认保存") } },
+        confirmButton = { TextButton({ model.saveRecord(record?.id, projectId, date, BillingMode.from(mode), unit, quantity, price, note, { confirmSave = false; onBack() }, draftId) }, enabled = !busy) { Text("确认保存") } },
         dismissButton = { TextButton({ confirmSave = false }, enabled = !busy) { Text("返回核对") } })
 }
 

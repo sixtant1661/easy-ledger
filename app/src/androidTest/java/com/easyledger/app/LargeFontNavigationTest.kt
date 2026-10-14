@@ -18,7 +18,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.easyledger.app.ui.navigation.EasyLedgerApp
 import com.easyledger.app.ui.theme.EasyLedgerTheme
 import org.junit.Rule
-import org.junit.Before
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -37,6 +39,11 @@ class LargeFontNavigationTest {
         if (rule.onAllNodesWithText("跳过").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithText("跳过").performScrollTo().performClick()
         rule.onNodeWithText("查看项目").performScrollTo().assertIsDisplayed()
             .assertHeightIsAtLeast(56.dp).performClick()
+        try {
+            rule.waitUntil(10_000) { rule.onAllNodesWithTag("project_list").fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: Throwable) {
+            throw AssertionError("Large-font navigation did not reach projects. UI snapshot:\n" + rule.onRoot().printToString().take(2500), failure)
+        }
         rule.onNodeWithTag("project_list").performScrollToNode(hasText("暂无项目"))
         rule.onNodeWithText("暂无项目").assertIsDisplayed()
         rule.onNodeWithTag("nav_settings").performClick()

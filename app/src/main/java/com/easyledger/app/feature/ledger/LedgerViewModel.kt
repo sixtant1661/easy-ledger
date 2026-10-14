@@ -16,6 +16,7 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     val projectSearch = MutableStateFlow("")
     val recordSearch = MutableStateFlow("")
     val busy = MutableStateFlow(false)
+    val replayGuide = MutableStateFlow(false)
     val readError = MutableStateFlow<String?>(null)
     val notices = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val allProjects = repository.allProjects.catch { readError.value = "项目读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
@@ -39,11 +40,11 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
             finally { busy.value = false }
         }
     }
-    fun saveProject(id: String?, name: String, note: String, mode: BillingMode, unit: String, price: String, done: () -> Unit) =
-        write("项目已保存", done) { repository.saveProject(id, name, note, mode, unit, price) }
+    fun saveProject(id: String?, name: String, note: String, mode: BillingMode, unit: String, price: String, done: () -> Unit, draftId: String? = null) =
+        write("项目已保存", done) { repository.saveProject(id, name, note, mode, unit, price, draftId) }
     fun deleteProject(id: String, done: () -> Unit) = write("项目已删除，历史工作记录仍保留", done) { repository.deleteProject(id) }
-    fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String, done: () -> Unit) =
-        write("工作记录已保存", done) { repository.saveRecord(id, projectId, date, mode, unit, quantity, price, note) }
+    fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String, done: () -> Unit, draftId: String? = null) =
+        write("工作记录已保存", done) { repository.saveRecord(id, projectId, date, mode, unit, quantity, price, note, draftId) }
     fun deleteRecord(id: String, done: () -> Unit) = write("记录已删除", done) { repository.deleteRecord(id) }
-    fun finishOnboarding(done: () -> Unit) = write("可以开始记账了", done) { repository.finishOnboarding() }
+    fun finishOnboarding(done: () -> Unit) = write("可以开始记账了", { replayGuide.value = false; done() }) { repository.finishOnboarding() }
 }

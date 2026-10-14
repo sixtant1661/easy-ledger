@@ -24,6 +24,8 @@ import androidx.compose.material3.SnackbarHostState
 import com.easyledger.app.feature.ledger.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -41,13 +43,16 @@ fun EasyLedgerApp() {
     val readError by model.readError.collectAsStateWithLifecycle()
     val allProjects by model.allProjects.collectAsStateWithLifecycle()
     val allRecords by model.allRecords.collectAsStateWithLifecycle()
-    var guideRequested by rememberSaveable { mutableStateOf(false) }
+    val guideRequested by model.replayGuide.collectAsStateWithLifecycle()
     val showGuide = onboarding == false || guideRequested
     val snackbar = remember { SnackbarHostState() }
+    var snackbarHeight by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     LaunchedEffect(model) { model.notices.collect { snackbar.showSnackbar(it) } }
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
+    val editing = currentRoute?.startsWith("record/") == true || currentRoute?.startsWith("project/") == true
     fun open(destination: Destination) {
         navController.navigate(destination.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -57,9 +62,9 @@ fun EasyLedgerApp() {
     }
     Scaffold(
         modifier = Modifier.imePadding(),
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.onSizeChanged { snackbarHeight = it.height }) },
         bottomBar = {
-            if (!showGuide && onboarding != null && readError == null) NavigationBar {
+            if (!showGuide && !editing && onboarding != null && readError == null) NavigationBar {
                 Destination.entries.forEach { destination ->
                     NavigationBarItem(
                         modifier = Modifier.testTag("nav_${destination.route}"),
@@ -84,11 +89,11 @@ fun EasyLedgerApp() {
     ) { padding ->
         if (readError != null) { com.easyledger.app.ui.components.InformationCard("无法打开记账本", readError!!) }
         else if (onboarding == null) { com.easyledger.app.ui.components.InformationCard("正在打开记账本", "请稍候，数据保存在手机本地。") }
-        else if (showGuide) { OnboardingScreen(model, { guideRequested = false }, Modifier.padding(padding).fillMaxSize()) }
-        else NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding).imePadding()) {
+        else if (showGuide) { OnboardingScreen(model, { model.replayGuide.value = false }, Modifier.padding(padding).fillMaxSize()) }
+        else NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding).padding(bottom = with(density) { snackbarHeight.toDp() } + if (snackbarHeight > 0) 8.dp else 0.dp).imePadding()) {
             composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize(), onNewRecord = { navController.navigate("record/new") }, onHistory = { navController.navigate("history") }) }
             composable(Destination.PROJECTS.route) { ProjectList(model, { navController.navigate("project/new") }, { navController.navigate("project/$it") }, Modifier.fillMaxSize()) }
-            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { guideRequested = true }) }
+            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { model.replayGuide.value = true }) }
             composable("history") { HistoryScreen(model, { navController.navigate("detail/$it") }, { navController.popBackStack() }, Modifier.fillMaxSize()) }
             composable("project/{id}") { entry ->
                 val id = entry.arguments?.getString("id")
