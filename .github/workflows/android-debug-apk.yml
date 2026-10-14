@@ -45,6 +45,16 @@ jobs:
           path: ~/.android/debug.keystore
           key: easy-ledger-debug-signing-v1
 
+      - name: Diagnose signing location without exposing private keys
+        run: |
+          ./gradlew --no-daemon signingReport > "$RUNNER_TEMP/signing-report.txt"
+          python3 - <<'PYKEY'
+          import pathlib, os
+          for line in pathlib.Path(os.environ['RUNNER_TEMP'], 'signing-report.txt').read_text().splitlines():
+              if line.strip().startswith(('Store:', 'SHA-256:', 'Error:')):
+                  print('::notice title=Signing location diagnostic::' + line.strip())
+          PYKEY
+
       - name: Protect existing preview signing identity
         run: |
           if test -f .github/debug-signing-cert.sha256 && ! test -f "$HOME/.android/debug.keystore"; then
