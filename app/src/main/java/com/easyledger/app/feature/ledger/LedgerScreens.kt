@@ -26,6 +26,7 @@ import com.easyledger.app.ui.components.PageContent
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.easyledger.app.domain.time.*
 
 @Composable
 fun MainButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
@@ -55,7 +56,7 @@ fun ConfirmDelete(title: String, message: String, busy: Boolean, onDismiss: () -
 }
 
 @Composable
-private fun ModePicker(value: BillingMode, onChange: (BillingMode) -> Unit) {
+fun ModePicker(value: BillingMode, onChange: (BillingMode) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         OutlinedButton({ open = true }, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("计费方式：${value.label} ▾") }
@@ -66,7 +67,7 @@ private fun ModePicker(value: BillingMode, onChange: (BillingMode) -> Unit) {
 }
 
 @Composable
-private fun rememberExitGuard(onBack: () -> Unit, busy: Boolean): () -> Unit {
+fun rememberExitGuard(onBack: () -> Unit, busy: Boolean): () -> Unit {
     var confirm by rememberSaveable { mutableStateOf(false) }
     BackHandler { if (!busy) confirm = true }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("放弃本次填写？") },
@@ -152,7 +153,7 @@ fun HistoryScreen(model: LedgerViewModel, onRecord: (String) -> Unit, onBack: ()
 }
 
 @Composable
-fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProject: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProject: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier, initialSpans: List<TimeSpan> = emptyList()) {
     val projects by model.allProjects.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
     val available = projects.filter { it.deletedAt == null || it.id == record?.projectId }
@@ -164,15 +165,22 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
     var quantity by rememberSaveable { mutableStateOf(record?.quantity ?: "") }
     var price by rememberSaveable { mutableStateOf(record?.unitPrice ?: "") }
     var note by rememberSaveable { mutableStateOf(record?.note ?: "") }
+    var savedSpans by rememberSaveable { mutableStateOf(initialSpans.map { it.start + "|" + it.end }) }
+    val spans = savedSpans.map { TimeSpan(it.substringBefore("|"), it.substringAfter("|")) }
+    var useTime by rememberSaveable { mutableStateOf(record?.quantitySource == "TIME") }
+    val timeResult = runCatching { WorkTime.minutes(date, spans) }
+    val billed = if(useTime && spans.isNotEmpty() && timeResult.isSuccess) WorkTime.hours(timeResult.getOrThrow()) else quantity
+    fun changeDate(next: String) { savedSpans = WorkTime.shift(spans,date,next).map { it.start + "|" + it.end }; date=next }
     var chooseProject by remember { mutableStateOf(false) }
     var confirmSave by remember { mutableStateOf(false) }
     val exit = rememberExitGuard(onBack, busy)
     val context = LocalContext.current
     val allRecords by model.allRecords.collectAsStateWithLifecycle()
+    val allSegments by model.segments.collectAsStateWithLifecycle()
     val duplicate = allRecords.any { it.record.id != record?.id && it.record.projectId == projectId && it.record.date == date &&
         it.record.quantity.toBigDecimalOrNull()?.compareTo(quantity.toBigDecimalOrNull() ?: java.math.BigDecimal.ZERO) == 0 &&
         it.record.unitPrice.toBigDecimalOrNull()?.compareTo(price.toBigDecimalOrNull() ?: java.math.BigDecimal.ZERO) == 0 }
-    val calculation = runCatching { Money.amount(quantity, price, BillingMode.from(mode)).toPlainString() }
+    val calculation = runCatching { Money.amount(billed, price, BillingMode.from(mode), record?.unitPrice).toPlainString() }
     val amount = calculation.getOrNull()
     fun choose(p: ProjectEntity) {
         projectId = p.id
@@ -195,36 +203,51 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
         }
         OutlinedButton({
             val calendar = Calendar.getInstance().apply { time = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).parse(date)!! }
-            DatePickerDialog(context, { _, y, m, d -> date = String.format(Locale.ROOT, "%04d-%02d-%02d", y, m + 1, d) },
+            DatePickerDialog(context, { _, y, m, d -> changeDate(String.format(Locale.ROOT, "%04d-%02d-%02d", y, m + 1, d)) },
                 calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
         }, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("工作日期：$date（点此选择）") }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("今天" to 0, "昨天" to -1, "前天" to -2).forEach { (label, offset) ->
-                TextButton({ val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }; date = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(c.time) }, Modifier.weight(1f).heightIn(min = 56.dp)) { Text(label) }
+                TextButton({ val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }; changeDate(SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(c.time)) }, Modifier.weight(1f).heightIn(min = 56.dp)) { Text(label) }
             }
         }
-        ModePicker(BillingMode.from(mode)) { mode = it.name; unit = it.unit }
+        if(record == null) OutlinedButton({
+            val previousDate=java.time.LocalDate.parse(date).minusDays(1).toString()
+            val previous=allRecords.firstOrNull { it.record.projectId==projectId && it.record.date==previousDate }?.record
+            if(previous != null) {
+                mode=previous.mode;unit=previous.unit;quantity=previous.quantity;price=previous.unitPrice;note=previous.note;useTime=previous.quantitySource=="TIME"
+                savedSpans=WorkTime.shift(allSegments.orEmpty().filter { it.recordId==previous.id }.map { TimeSpan(it.startDateTime,it.endDateTime) },previous.date,date).map { it.start+"|"+it.end }
+            }
+        }, Modifier.fillMaxWidth().heightIn(min=56.dp), enabled=allRecords.any { it.record.projectId==projectId && it.record.date==java.time.LocalDate.parse(date).minusDays(1).toString() }) { Text("复制上一天最近一条记录（保存前核对）") }
+        ModePicker(BillingMode.from(mode)) { mode = it.name; unit = it.unit; if(it != BillingMode.HOUR) useTime=false }
+        TimeInputs(date, spans) { next -> savedSpans=next.map { it.start+"|"+it.end }; if(next.isEmpty()) useTime=false }
+        if(spans.isNotEmpty()) {
+            InformationCard("实际工作时长", timeResult.getOrNull()?.let { "$it 分钟 · ${WorkTime.hours(it)} 小时" } ?: timeResult.exceptionOrNull()?.message.orEmpty())
+            if(mode == BillingMode.HOUR.name) Row { Checkbox(useTime,{ useTime=it }); Text("按时间自动计算计费小时", Modifier.padding(top=12.dp)) }
+        }
         TextField("单位", unit, { unit = it })
-        TextField("计费数量", quantity, { quantity = it }, decimal = true)
+        if(useTime) InformationCard("计费小时", "$billed 小时；取消自动计算后可手动调整。")
+        else TextField("计费数量", quantity, { quantity = it }, decimal = true)
         TextField("单价（元）", price, { price = it }, decimal = true)
         TextField("备注（可不填）", note, { note = it })
         InformationCard("请核对金额", if (amount != null) "$amount 元" else "填写数量和单价后自动计算。${calculation.exceptionOrNull()?.message ?: ""}")
-        Text("数量手动填写；按天计费不会自动换算工时。")
-        MainButton(if (busy) "正在保存…" else "核对并保存", !busy && amount != null && projectId.isNotBlank() && unit.isNotBlank()) { confirmSave = true }
+        Text("实际工时和结算数量分别保存；按天计费不会自动换算工时。")
+        MainButton(if (busy) "正在保存…" else "核对并保存", !busy && amount != null && timeResult.isSuccess && projectId.isNotBlank() && unit.isNotBlank()) { confirmSave = true }
         OutlinedButton(exit, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("取消") }
     }
     if (confirmSave) AlertDialog(onDismissRequest = { if (!busy) confirmSave = false }, title = { Text("确认保存这条记录？") },
-        text = { Text("$date\n${available.firstOrNull { it.id == projectId }?.name ?: ""}\n数量 $quantity $unit\n单价 $price 元\n金额 $amount 元\n${if (duplicate) "提醒：已有同项目、日期、数量和单价的记录，可能重复，请核对。" else "同一天允许多条记录。"}") },
-        confirmButton = { TextButton({ model.saveRecord(record?.id, projectId, date, BillingMode.from(mode), unit, quantity, price, note, { confirmSave = false; onBack() }, draftId) }, enabled = !busy) { Text("确认保存") } },
+        text = { Text("$date\n${available.firstOrNull { it.id == projectId }?.name ?: ""}\n数量 $billed $unit\n单价 $price 元\n金额 $amount 元\n${if (duplicate) "提醒：已有同项目、日期、数量和单价的记录，可能重复，请核对。" else "同一天允许多条记录。"}") },
+        confirmButton = { TextButton({ model.saveRecord(record?.id, projectId, date, BillingMode.from(mode), unit, billed, price, note, { confirmSave = false; onBack() }, draftId, spans, useTime) }, enabled = !busy) { Text("确认保存") } },
         dismissButton = { TextButton({ confirmSave = false }, enabled = !busy) { Text("返回核对") } })
 }
 
 @Composable
-fun RecordDetail(item: RecordWithProject, model: LedgerViewModel, onEdit: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun RecordDetail(item: RecordWithProject, model: LedgerViewModel, onEdit: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier, spans: List<TimeSpan> = emptyList()) {
     val busy by model.busy.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf(false) }
     PageContent("记录详情", modifier) {
         InformationCard(item.projectName, "日期：${item.record.date}\n计费：${BillingMode.from(item.record.mode).label}\n数量：${item.record.quantity} ${item.record.unit}\n单价：${item.record.unitPrice} 元\n金额：${item.record.amount} 元\n备注：${item.record.note.ifBlank { "无" }}")
+        if(spans.isNotEmpty()) InformationCard("原始时间段", spans.joinToString("\n") { "${it.start.replace('T',' ')}–${it.end.replace('T',' ')}" } + "\n实际 ${item.record.actualMinutes} 分钟；计费数量独立保存。")
         MainButton("修改记录", !busy, onEdit)
         OutlinedButton({ deleting = true }, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("删除记录") }
         TextButton(onBack, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("返回历史记录") }

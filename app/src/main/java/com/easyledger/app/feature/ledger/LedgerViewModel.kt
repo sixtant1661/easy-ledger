@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import com.easyledger.app.domain.time.TimeSpan
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LedgerViewModel(application: Application) : AndroidViewModel(application) {
@@ -19,6 +20,7 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     val replayGuide = MutableStateFlow(false)
     val readError = MutableStateFlow<String?>(null)
     val notices = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val segments = repository.dao.observeSegments().catch { readError.value = "工时读取失败，未清除数据。" }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val allProjects = repository.allProjects.catch { readError.value = "项目读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val projects = projectSearch.flatMapLatest(repository::projects).catch { readError.value = "项目读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
@@ -43,8 +45,10 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     fun saveProject(id: String?, name: String, note: String, mode: BillingMode, unit: String, price: String, done: () -> Unit, draftId: String? = null) =
         write("项目已保存", done) { repository.saveProject(id, name, note, mode, unit, price, draftId) }
     fun deleteProject(id: String, done: () -> Unit) = write("项目已删除，历史工作记录仍保留", done) { repository.deleteProject(id) }
-    fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String, done: () -> Unit, draftId: String? = null) =
-        write("工作记录已保存", done) { repository.saveRecord(id, projectId, date, mode, unit, quantity, price, note, draftId) }
+    fun saveRecord(id: String?, projectId: String, date: String, mode: BillingMode, unit: String, quantity: String, price: String, note: String, done: () -> Unit, draftId: String? = null, spans: List<TimeSpan>? = null, useTime: Boolean = false) =
+        write("工作记录已保存", done) { repository.saveRecord(id, projectId, date, mode, unit, quantity, price, note, draftId, spans, useTime) }
+    fun saveBatch(projectId: String, dates: List<String>, mode: BillingMode, unit: String, quantity: String, price: String, note: String, spans: List<TimeSpan>, templateDate: String, useTime: Boolean, batchId: String, done: () -> Unit) =
+        write("批量工作记录已保存", done) { repository.saveBatch(projectId, dates, mode, unit, quantity, price, note, spans, templateDate, useTime, batchId) }
     fun deleteRecord(id: String, done: () -> Unit) = write("记录已删除", done) { repository.deleteRecord(id) }
     fun finishOnboarding(done: () -> Unit) = write("可以开始记账了", { replayGuide.value = false; done() }) { repository.finishOnboarding() }
 }

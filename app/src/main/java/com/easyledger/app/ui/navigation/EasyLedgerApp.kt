@@ -43,6 +43,7 @@ fun EasyLedgerApp() {
     val readError by model.readError.collectAsStateWithLifecycle()
     val allProjects by model.allProjects.collectAsStateWithLifecycle()
     val allRecords by model.allRecords.collectAsStateWithLifecycle()
+    val allSegments by model.segments.collectAsStateWithLifecycle()
     val guideRequested by model.replayGuide.collectAsStateWithLifecycle()
     val showGuide = onboarding == false || guideRequested
     val snackbar = remember { SnackbarHostState() }
@@ -52,7 +53,7 @@ fun EasyLedgerApp() {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
-    val editing = currentRoute?.startsWith("record/") == true || currentRoute?.startsWith("project/") == true
+    val editing = currentRoute?.startsWith("record/") == true || currentRoute?.startsWith("project/") == true || currentRoute == "batch" || currentRoute == "backup"
     fun open(destination: Destination) {
         navController.navigate(destination.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -91,9 +92,12 @@ fun EasyLedgerApp() {
         else if (onboarding == null) { com.easyledger.app.ui.components.InformationCard("正在打开记账本", "请稍候，数据保存在手机本地。") }
         else if (showGuide) { OnboardingScreen(model, { model.replayGuide.value = false }, Modifier.padding(padding).fillMaxSize()) }
         else NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding).padding(bottom = with(density) { snackbarHeight.toDp() } + if (snackbarHeight > 0) 8.dp else 0.dp).imePadding()) {
-            composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize(), onNewRecord = { navController.navigate("record/new") }, onHistory = { navController.navigate("history") }) }
+            composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize(), onNewRecord = { navController.navigate("record/new") }, onHistory = { navController.navigate("history") }, onBatch = { navController.navigate("batch") }, onSettlement = { navController.navigate("settlement") }) }
             composable(Destination.PROJECTS.route) { ProjectList(model, { navController.navigate("project/new") }, { navController.navigate("project/$it") }, Modifier.fillMaxSize()) }
-            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { model.replayGuide.value = true }) }
+            composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { model.replayGuide.value = true }, onBackup = { navController.navigate("backup") }) }
+            composable("batch") { BatchScreen(model, { navController.popBackStack() }, Modifier.fillMaxSize()) }
+            composable("backup") { com.easyledger.app.feature.tools.ToolsScreen({ navController.popBackStack() }, Modifier.fillMaxSize(), backupOnly = true) }
+            composable("settlement") { com.easyledger.app.feature.tools.ToolsScreen({ navController.popBackStack() }, Modifier.fillMaxSize()) }
             composable("history") { HistoryScreen(model, { navController.navigate("detail/$it") }, { navController.popBackStack() }, Modifier.fillMaxSize()) }
             composable("project/{id}") { entry ->
                 val id = entry.arguments?.getString("id")
@@ -103,12 +107,12 @@ fun EasyLedgerApp() {
             composable("record/{id}") { entry ->
                 val id = entry.arguments?.getString("id")
                 val record = allRecords.firstOrNull { it.record.id == id }?.record
-                if (id == "new" || record != null) RecordEditor(record, model, { navController.navigate("project/new") }, { navController.popBackStack() }, Modifier.fillMaxSize())
+                if ((id == "new" || record != null) && allSegments != null) RecordEditor(record, model, { navController.navigate("project/new") }, { navController.popBackStack() }, Modifier.fillMaxSize(), allSegments.orEmpty().filter { it.recordId == id }.map { com.easyledger.app.domain.time.TimeSpan(it.startDateTime, it.endDateTime) })
             }
             composable("detail/{id}") { entry ->
                 val id = entry.arguments?.getString("id")
                 val record = allRecords.firstOrNull { it.record.id == id }
-                if (record != null) RecordDetail(record, model, { navController.navigate("record/$id") }, { navController.popBackStack() }, Modifier.fillMaxSize())
+                if (record != null) RecordDetail(record, model, { navController.navigate("record/$id") }, { navController.popBackStack() }, Modifier.fillMaxSize(), allSegments.orEmpty().filter { it.recordId == id }.map { com.easyledger.app.domain.time.TimeSpan(it.startDateTime, it.endDateTime) })
             }
         }
     }
