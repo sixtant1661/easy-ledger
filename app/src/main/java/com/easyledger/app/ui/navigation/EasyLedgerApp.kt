@@ -38,6 +38,7 @@ fun EasyLedgerApp() {
     val model: LedgerViewModel = viewModel()
     val onboarding by model.onboardingComplete.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
+    val readError by model.readError.collectAsStateWithLifecycle()
     val allProjects by model.allProjects.collectAsStateWithLifecycle()
     val allRecords by model.allRecords.collectAsStateWithLifecycle()
     var guideRequested by rememberSaveable { mutableStateOf(false) }
@@ -55,9 +56,10 @@ fun EasyLedgerApp() {
         }
     }
     Scaffold(
+        modifier = Modifier.imePadding(),
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            if (!showGuide && onboarding != null) NavigationBar {
+            if (!showGuide && onboarding != null && readError == null) NavigationBar {
                 Destination.entries.forEach { destination ->
                     NavigationBarItem(
                         modifier = Modifier.testTag("nav_${destination.route}"),
@@ -80,7 +82,8 @@ fun EasyLedgerApp() {
             }
         },
     ) { padding ->
-        if (onboarding == null) { com.easyledger.app.ui.components.InformationCard("正在打开记账本", "请稍候，数据保存在手机本地。") }
+        if (readError != null) { com.easyledger.app.ui.components.InformationCard("无法打开记账本", readError!!) }
+        else if (onboarding == null) { com.easyledger.app.ui.components.InformationCard("正在打开记账本", "请稍候，数据保存在手机本地。") }
         else if (showGuide) { OnboardingScreen(model, { guideRequested = false }, Modifier.padding(padding).fillMaxSize()) }
         else NavHost(navController, startDestination = Destination.HOME.route, modifier = Modifier.padding(padding).imePadding()) {
             composable(Destination.HOME.route) { HomeScreen({ open(Destination.PROJECTS) }, Modifier.fillMaxSize(), onNewRecord = { navController.navigate("record/new") }, onHistory = { navController.navigate("history") }) }

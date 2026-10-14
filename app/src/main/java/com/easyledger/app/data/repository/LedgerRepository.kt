@@ -41,7 +41,7 @@ class LedgerRepository(private val db: LedgerDatabase) {
         val record = WorkRecordEntity(id ?: UUID.randomUUID().toString(), projectId, date, mode.name, unit.trim(),
             Money.quantity(quantity, mode).toPlainString(), Money.decimal(price, "单价").toPlainString(), amount, note.trim(),
             existing?.createdAt ?: now, now, actualMinutes = existing?.actualMinutes,
-            quantitySource = existing?.quantitySource ?: "MANUAL", calculationPolicyVersion = existing?.calculationPolicyVersion ?: 1)
+            quantitySource = "MANUAL", calculationPolicyVersion = existing?.calculationPolicyVersion ?: 1)
         // Keep future time segments and original duration when changing billed quantity.
         if (existing == null) dao.insertRecord(record) else check(dao.updateRecord(record) == 1)
     }

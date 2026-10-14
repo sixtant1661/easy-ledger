@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -35,8 +37,9 @@ class LargeFontNavigationTest {
         if (rule.onAllNodesWithText("跳过").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithText("跳过").performScrollTo().performClick()
         rule.onNodeWithText("查看项目").performScrollTo().assertIsDisplayed()
             .assertHeightIsAtLeast(56.dp).performClick()
+        rule.onNodeWithTag("project_list").performScrollToNode(hasText("暂无项目"))
         rule.onNodeWithText("暂无项目").assertIsDisplayed()
         rule.onNodeWithTag("nav_settings").performClick()
-        rule.onNodeWithText("文字大小").assertIsDisplayed()
+        rule.onNodeWithText("文字大小").performScrollTo().assertIsDisplayed()
     }
 }

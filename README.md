@@ -106,6 +106,6 @@ GitHub Actions 首次本地数据版本生成并缓存 Debug 签名，后续校�
 
 常规设备测试：`./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.easyledger.app.UpdatePersistenceTest`。覆盖安装检查仅在测试模拟器运行 `python3 scripts/verify-update-persistence.py`，使用合成数据，不在生产记账手机上跑整套测试。
 
-Actions 运行 JVM 单元测试、lint、Debug 构建、API 35 模拟器数据库/迁移/UI 测试，并实际 force-stop + adb install -r 验证记录与引导状态。API 35 自动化通过不代表 Android 16/One UI 8 实机验证已通过。检查结果见 docs/BUILD_STATUS.md。
+Actions 运行 JVM 单元测试、lint、Debug 构建、API 36（Android 16）模拟器数据库/迁移/UI 测试，并实际 force-stop + adb install -r 验证记录与引导状态。API 35 自动化通过不代表 Android 16/One UI 8 实机验证已通过。检查结果见 docs/BUILD_STATUS.md。
 
 下一阶段优先实现 SAF 手动备份导出与恢复：版本化业务 JSON + 完整性校验；含项目、记录、时间段、列名与结算政策；导出数据库一致快照，恢复前校验、备份当前数据并在事务内替换，失败回退；不直接复制活动 WAL 主库，不申请全盘存储权限。缺少备份时明确提示使用风险。

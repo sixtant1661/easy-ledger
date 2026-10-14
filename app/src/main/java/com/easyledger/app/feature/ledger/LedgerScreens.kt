@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,11 +77,10 @@ fun ProjectList(model: LedgerViewModel, onCreate: () -> Unit, onEdit: (String) -
     val keyword by model.projectSearch.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<ProjectEntity?>(null) }
-    Column(modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("项目列表", style = MaterialTheme.typography.headlineMedium)
-        SearchField(keyword, { model.projectSearch.value = it }, "搜索项目名称或备注")
-        MainButton("创建项目", !busy, onCreate)
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(modifier.testTag("project_list").padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text("项目列表", style = MaterialTheme.typography.headlineMedium) }
+        item { SearchField(keyword, { model.projectSearch.value = it }, "搜索项目名称或备注") }
+        item { MainButton("创建项目", !busy, onCreate) }
             if (projects.isEmpty()) item { InformationCard(if (keyword.isBlank()) "暂无项目" else "没有找到项目", "可以创建项目，或清空关键词再试一次。") }
             items(projects, key = { it.id }) { project ->
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -94,7 +94,6 @@ fun ProjectList(model: LedgerViewModel, onCreate: () -> Unit, onEdit: (String) -
                     }
                 }
             }
-        }
     }
     deleting?.let { project -> ConfirmDelete("删除项目？", "删除“${project.name}”后，已有工作记录仍保留在历史记录中。", busy,
         { deleting = null }, { model.deleteProject(project.id) { deleting = null } }) }
@@ -125,11 +124,10 @@ fun ProjectEditor(project: ProjectEntity?, model: LedgerViewModel, onBack: () ->
 fun HistoryScreen(model: LedgerViewModel, onRecord: (String) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val records by model.records.collectAsStateWithLifecycle()
     val keyword by model.recordSearch.collectAsStateWithLifecycle()
-    Column(modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("历史记录", style = MaterialTheme.typography.headlineMedium)
-        SearchField(keyword, { model.recordSearch.value = it }, "搜索项目名称或记录备注")
-        Text("${records.size} 条记录 · ${if (keyword.isBlank()) "合计" else "搜索结果合计"} ${Money.total(records.map { it.record.amount })} 元")
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier.testTag("record_list").padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text("历史记录", style = MaterialTheme.typography.headlineMedium) }
+        item { SearchField(keyword, { model.recordSearch.value = it }, "搜索项目名称或记录备注") }
+        item { Text("${records.size} 条记录 · ${if (keyword.isBlank()) "合计" else "搜索结果合计"} ${Money.total(records.map { it.record.amount })} 元") }
             if (records.isEmpty()) item { InformationCard("没有找到记录", "还没有记录，或没有匹配的关键词。可以先新增工作记录。") }
             items(records, key = { it.record.id }) { item ->
                 Card(onClick = { onRecord(item.record.id) }, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -142,8 +140,7 @@ fun HistoryScreen(model: LedgerViewModel, onRecord: (String) -> Unit, onBack: ()
                     }
                 }
             }
-        }
-        OutlinedButton(onBack, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("返回首页") }
+        item { OutlinedButton(onBack, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("返回首页") } }
     }
 }
 

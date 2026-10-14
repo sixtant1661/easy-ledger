@@ -6,6 +6,10 @@ on:
     branches:
       - feature/android-foundation
 
+concurrency:
+  group: android-debug-apk-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -70,7 +74,7 @@ jobs:
       - name: Test Room, migration and UI on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_2
@@ -87,6 +91,7 @@ jobs:
           for p in pathlib.Path('app/build').rglob('TEST-*.xml'):
               root = ET.parse(p).getroot()
               print(str(p), root.attrib)
+              print('::notice title=Test result::' + str(p) + ' tests=' + root.get('tests', '?') + ' failures=' + root.get('failures', '0') + ' errors=' + root.get('errors', '0'))
               for test in root.findall('.//testcase'):
                   for failure in [*test.findall('failure'), *test.findall('error')]:
                       message = (failure.text or failure.get('message', ''))[:3000]

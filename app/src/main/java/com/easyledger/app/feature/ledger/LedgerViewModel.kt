@@ -16,16 +16,17 @@ class LedgerViewModel(application: Application) : AndroidViewModel(application) 
     val projectSearch = MutableStateFlow("")
     val recordSearch = MutableStateFlow("")
     val busy = MutableStateFlow(false)
+    val readError = MutableStateFlow<String?>(null)
     val notices = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val allProjects = repository.allProjects.catch { notices.emit("项目读取失败，请重试；原数据未被清除") }
+    val allProjects = repository.allProjects.catch { readError.value = "项目读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val projects = projectSearch.flatMapLatest(repository::projects).catch { notices.emit("项目读取失败，请重试") }
+    val projects = projectSearch.flatMapLatest(repository::projects).catch { readError.value = "项目读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val records = recordSearch.flatMapLatest(repository::records).catch { notices.emit("记录读取失败，请重试；原数据未被清除") }
+    val records = recordSearch.flatMapLatest(repository::records).catch { readError.value = "记录读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val allRecords = repository.records("").stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val allRecords = repository.records("").catch { readError.value = "记录读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val onboardingComplete = repository.onboarding.map { it == "true" }
-        .catch { notices.emit("引导状态读取失败，请重试") }
+        .catch { readError.value = "记账本读取失败。未清除数据，请关闭后重新打开；请勿卸载或清除应用数据。" }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private fun write(success: String, onDone: () -> Unit, operation: suspend () -> Unit) {
