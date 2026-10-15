@@ -1,0 +1,113 @@
+name: Legacy Data Rescue Verification
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: legacy-data-rescue-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-legacy-rescue:
+    name: Verify legacy rescue without distributing APKs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    env:
+      ANDROID_USER_HOME: /tmp/easy-ledger-android
+      EASY_LEDGER_SIGNING_PASSWORD: ${{ secrets.EASY_LEDGER_SIGNING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Prepare Android folders
+        run: mkdir -p "$ANDROID_USER_HOME"
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore persistent NEW-package key from repository secrets
+        env:
+          KEY_BASE64: ${{ secrets.EASY_LEDGER_SIGNING_KEY_BASE64 }}
+        run: |
+          if test -n "$KEY_BASE64"; then echo '::notice title=Signing input availability::Key is present'; else echo '::notice title=Signing input availability::Key is absent'; fi
+          if test -n "$EASY_LEDGER_SIGNING_PASSWORD"; then echo '::notice title=Signing input availability::Password is present'; else echo '::notice title=Signing input availability::Password is absent'; fi
+          if test -n "$KEY_BASE64" && test -n "$EASY_LEDGER_SIGNING_PASSWORD"; then
+            mkdir -p "$RUNNER_TEMP/ledger-signing"
+            chmod 700 "$RUNNER_TEMP/ledger-signing"
+            printf '%s' "$KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/ledger-signing/ledger.jks"
+            chmod 600 "$RUNNER_TEMP/ledger-signing/ledger.jks"
+            echo "EASY_LEDGER_KEYSTORE=$RUNNER_TEMP/ledger-signing/ledger.jks" >> "$GITHUB_ENV"
+          else
+            echo '::error::Persistent signing secrets are absent in this run. Stop before rebuilding; check runtime secret availability.'
+            exit 1
+          fi
+      - name: Fast unit and rescue-tool tests
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+          python3 scripts/check-instrumentation-contracts.py
+      - name: Build the actual legacy 0.2 source in separate CI folder
+        uses: actions/checkout@v4
+        with:
+          ref: 61358fdcd2f844f5d9dfb32d1337fe9b2d540e62
+          path: legacy-source
+      - name: Build legacy package without the new-package key
+        working-directory: legacy-source
+        run: |
+          mkdir -p "$RUNNER_TEMP/legacy-android"
+          env -u EASY_LEDGER_KEYSTORE -u EASY_LEDGER_SIGNING_PASSWORD ANDROID_USER_HOME="$RUNNER_TEMP/legacy-android" ./gradlew --no-daemon assembleDebug
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android 16 tests, non-destructive legacy rescue and update retention
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            python3 scripts/verify-legacy-rescue.py
+      - name: Report actual test results
+        if: always()
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, xml.etree.ElementTree as ET
+          for p in pathlib.Path('app/build').rglob('TEST-*.xml'):
+              root = ET.parse(p).getroot()
+              print('::notice title=Test result::' + str(p) + ' tests=' + root.get('tests', '?') + ' failures=' + root.get('failures', '0') + ' errors=' + root.get('errors', '0'))
+              for test in root.findall('.//testcase'):
+                  for failure in [*test.findall('failure'), *test.findall('error')]:
+                      message = (failure.text or failure.get('message', ''))[:3000]
+                      message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                      print('::error title=' + test.get('name', 'Test failed') + '::' + message)
+          PYTEST
+      - name: Save test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: easy-ledger-test-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+          retention-days: 14
+      - name: Save safe desktop migration tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: easy-ledger-migration-tools
+          path: |
+            scripts/rescue-old-ledger.py
+            docs/SAFE_MIGRATION.md
+          retention-days: 30

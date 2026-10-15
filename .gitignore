@@ -1,0 +1,17 @@
+/.gradle/
+/.kotlin/
+/**/build/
+/local.properties
+/.idea/
+*.iml
+*.apk
+*.aab
+*.jks
+*.keystore
+*.db
+*.db-shm
+*.db-wal
+/backups/
+/screenshots/
+__pycache__/
+*.pyc
