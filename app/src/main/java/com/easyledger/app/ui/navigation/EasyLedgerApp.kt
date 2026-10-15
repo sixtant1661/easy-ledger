@@ -131,7 +131,7 @@ fun EasyLedgerApp() {
             composable(Destination.SETTINGS.route) { SettingsScreen(Modifier.fillMaxSize(), onGuide = { model.replayGuide.value = true }, onBackup = { navController.navigate("backup") }) }
             composable("batch") { BatchScreen(model, { navController.popBackStack() }, Modifier.fillMaxSize(), onHistory={navController.navigate("history")}) }
             composable("backup") { com.easyledger.app.feature.tools.ToolsScreen({ navController.popBackStack() }, Modifier.fillMaxSize(), backupOnly = true) }
-            composable("settlement") { com.easyledger.app.feature.tools.ToolsScreen({ navController.popBackStack() }, Modifier.fillMaxSize(), onBusyChange={toolsBusy=it}) }
+            composable("settlement") { com.easyledger.app.feature.tools.ToolsScreen({ navController.popBackStack() }, Modifier.fillMaxSize(), onBusyChange={toolsBusy=it},onRecord={navController.navigate("detail/$it")}) }
             composable("history") { HistoryScreen(model, { navController.navigate("detail/$it") }, { navController.popBackStack() }, Modifier.fillMaxSize()) }
             composable("project/{id}") { entry ->
                 val id = entry.arguments?.getString("id")

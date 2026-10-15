@@ -2,6 +2,9 @@ package com.easyledger.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -23,9 +26,9 @@ private val CorporateColors = lightColorScheme(
 )
 
 private val AccessibleTypography = Typography(
-    headlineMedium = TextStyle(fontSize = 28.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 24.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
-    titleMedium = TextStyle(fontSize = 20.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+    headlineMedium = TextStyle(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold),
+    titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
+    titleMedium = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 18.sp, lineHeight = 28.sp),
     bodyMedium = TextStyle(fontSize = 18.sp, lineHeight = 28.sp),
     labelLarge = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
@@ -35,5 +38,5 @@ private val AccessibleTypography = Typography(
 @Composable
 fun EasyLedgerTheme(content: @Composable () -> Unit) {
     // Fixed product colors: One UI wallpaper colors must not override readability.
-    MaterialTheme(colorScheme = CorporateColors, typography = AccessibleTypography, content = content)
+    MaterialTheme(colorScheme = CorporateColors, typography = AccessibleTypography, shapes=Shapes(small=RoundedCornerShape(8.dp),medium=RoundedCornerShape(12.dp),large=RoundedCornerShape(16.dp)), content = content)
 }

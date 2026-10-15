@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.easyledger.app.domain.time.TimeSpan
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -30,11 +31,11 @@ fun TimeInputs(date: String, spans: List<TimeSpan>, onChange: (List<TimeSpan>) -
         Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(2.dp)) {
             TextButton({ TimePickerDialog(context,{_,h,m -> replace(a=LocalDate.parse(date).atTime(h,m))},start.hour,start.minute,true).show() },Modifier.weight(1f).heightIn(min=48.dp),contentPadding=PaddingValues(2.dp)) { Text("起 ${start.toLocalTime()}") }
             TextButton({ TimePickerDialog(context,{_,h,m -> replace(b=end.toLocalDate().atTime(h,m))},end.hour,end.minute,true).show() },Modifier.weight(1f).heightIn(min=48.dp),contentPadding=PaddingValues(2.dp)) { Text("止 ${end.toLocalTime()}") }
-            Column(horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally) {
+            Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                 Checkbox(end.toLocalDate()!=start.toLocalDate(),{ next -> replace(b=LocalDate.parse(date).plusDays(if(next) 1 else 0).atTime(end.toLocalTime())) },Modifier.size(48.dp))
-                Text("次日",style=MaterialTheme.typography.bodySmall)
+                Text("次日",fontSize=14.sp)
             }
-            TextButton({onChange(spans.filterIndexed { i,_ -> i!=index })},Modifier.width(48.dp),contentPadding=PaddingValues(0.dp)) { Text("×") }
+            TextButton({onChange(spans.filterIndexed { i,_ -> i!=index })},Modifier.width(40.dp).heightIn(min=48.dp),contentPadding=PaddingValues(0.dp)) { Text("×") }
         }
     }
     TextButton({ val day=LocalDate.parse(date);onChange(spans+TimeSpan(day.atTime(7,0).toString(),day.atTime(11,0).toString())) },Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("⊕ 添加时间段") }

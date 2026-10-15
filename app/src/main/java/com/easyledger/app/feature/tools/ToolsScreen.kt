@@ -6,6 +6,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.easyledger.app.R
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.List
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,7 +40,7 @@ import java.time.YearMonth
 private fun safeName(value: String): String = value.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trim('.').take(80).ifBlank { "工作结算单" }
 
 @Composable
-fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: Boolean = false, onBusyChange: (Boolean) -> Unit = {}) {
+fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: Boolean = false, onBusyChange: (Boolean) -> Unit = {}, historyOnly: Boolean = false, onRecord: (String) -> Unit = {}) {
     val context = LocalContext.current
     val repo = (context.applicationContext as LedgerApplication).repository
     val scope = rememberCoroutineScope()
@@ -40,8 +51,14 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
     var restoreConfirm by remember { mutableStateOf(false) }
     var project by rememberSaveable { mutableStateOf("") }
     var month by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
-    var start by rememberSaveable { mutableStateOf(YearMonth.now().atDay(1).toString()) }
-    var end by rememberSaveable { mutableStateOf(YearMonth.now().atEndOfMonth().toString()) }
+    var rangeStart by rememberSaveable { mutableStateOf(YearMonth.now().atDay(1).toString()) }
+    var rangeEnd by rememberSaveable { mutableStateOf(YearMonth.now().atEndOfMonth().toString()) }
+    var customRange by rememberSaveable { mutableStateOf(false) }
+    val selectedMonth=YearMonth.parse(month)
+    val start=if(customRange) rangeStart else selectedMonth.atDay(1).toString()
+    val end=if(customRange) rangeEnd else selectedMonth.atEndOfMonth().toString()
+    var choosingMonth by remember {mutableStateOf(false)}
+    var keyword by rememberSaveable {mutableStateOf("")}
     var choice by remember { mutableStateOf(false) }
     var showDates by rememberSaveable { mutableStateOf(false) }
     var exportKind by rememberSaveable { mutableStateOf("") }
@@ -149,35 +166,51 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
             "备份完整性及金额已校验。"
         }
     }
-    val preview=remember(data,project,start,end,columns) {data?.let {runCatching {Settlements.create(it,project.ifBlank {null},start,end,columns)}.getOrNull()}}
-    PageContent(if(backupOnly) "备份与恢复" else if(month=="全部日期") "全部账单" else "${LocalDate.parse(start).monthValue}月账单",modifier) {
+    val selectedData=remember(data,project,start,end,keyword) {data?.let {backup ->
+        val names=backup.projects.associate {it.id to it.name}
+        backup.copy(records=backup.records.filter {it.projectId==project && it.date>=start && it.date<=end && (keyword.isBlank() || it.note.contains(keyword,ignoreCase=true) || names[it.projectId].orEmpty().contains(keyword,ignoreCase=true))})
+    }}
+    val preview=remember(selectedData,project,start,end,columns) {selectedData?.takeIf {project.isNotBlank()}?.let {runCatching {Settlements.create(it,project,start,end,columns)}.getOrNull()}}
+    val rowIds=selectedData?.activeRecords.orEmpty().sortedWith(compareBy({it.date},{it.createdAt},{it.id})).map {it.id}
+    PageContent(if(backupOnly) "备份与恢复" else if(historyOnly) "历史记录" else if(customRange) "自定义账单" else "${selectedMonth.year}年${selectedMonth.monthValue}月账单",modifier) {
         if(!backupOnly) {
-            Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.weight(1f)) {
-                    TextButton({choice=true},Modifier.fillMaxWidth().heightIn(min=56.dp),enabled=!busy) {Text("${data?.projects?.firstOrNull {it.id==project}?.name ?: "选择项目"} ▾")}
+                    TextButton({choice=true},Modifier.fillMaxWidth().heightIn(min=48.dp),enabled=!busy,contentPadding=PaddingValues(horizontal=4.dp)) {Text("${data?.projects?.firstOrNull {it.id==project}?.name ?: "选择项目"} ▾",maxLines=2,overflow=TextOverflow.Ellipsis)}
                     DropdownMenu(choice,{choice=false}) {data?.projects?.forEach {p -> DropdownMenuItem({Text(p.name)},{project=p.id;choice=false})}}
                 }
-                TextButton({showDates=!showDates}) {Text("$month ▾")}
+                TextButton({choosingMonth=true},Modifier.heightIn(min=48.dp),enabled=!busy,contentPadding=PaddingValues(horizontal=4.dp)) {Text(if(customRange) "自定义日期 ▾" else "${selectedMonth.year}年${selectedMonth.monthValue}月 ▾",fontSize=16.sp)}
             }
+            TextButton({showDates=!showDates},Modifier.heightIn(min=40.dp),contentPadding=PaddingValues(horizontal=4.dp)) {Text("高级日期筛选 ${if(showDates) "⌃" else "⌄"}",fontSize=14.sp)}
             if(showDates) {
                 Row {
-                    TextButton({val m=(runCatching {YearMonth.parse(month)}.getOrDefault(YearMonth.now())).minusMonths(1);month=m.toString();start=m.atDay(1).toString();end=m.atEndOfMonth().toString()},Modifier.weight(1f)) {Text("‹ 上个月")}
-                    TextButton({val m=(runCatching {YearMonth.parse(month)}.getOrDefault(YearMonth.now())).plusMonths(1);month=m.toString();start=m.atDay(1).toString();end=m.atEndOfMonth().toString()},Modifier.weight(1f)) {Text("下个月 ›")}
+                    TextButton({month=selectedMonth.minusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("‹ 上个月")}
+                    TextButton({month=selectedMonth.plusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("下个月 ›")}
                 }
-                DateButton("开始日期",start) {start=it;month=YearMonth.from(LocalDate.parse(it)).toString()}
-                DateButton("结束日期",end) {end=it}
-                TextButton({start="1900-01-01";end="9999-12-31";month="全部日期"}) {Text("全部日期")}
+                DateButton("开始日期",start) {rangeStart=it;if(!customRange)rangeEnd=end;customRange=true}
+                DateButton("结束日期",end) {rangeEnd=it;if(!customRange)rangeStart=start;customRange=true}
+                if(customRange) TextButton({customRange=false}) {Text("恢复所选月份")}
             }
+            if(customRange) Text("$start 至 $end",fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(start>end) Text("结束日期不能早于开始日期，请调整日期范围。",fontSize=14.sp,color=MaterialTheme.colorScheme.error)
+            if(historyOnly) SearchField(keyword,{keyword=it},"搜索项目名称或备注")
             Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF4F1))) {
-                Column(Modifier.padding(20.dp)) {Text("累计金额（元）");Text(preview?.total ?: "0.00",style=MaterialTheme.typography.headlineMedium);Text("共 ${preview?.rows?.size ?: 0} 条记录",style=MaterialTheme.typography.bodyMedium)}
+                Column(Modifier.padding(16.dp)) {Text("累计金额（元）");Text(preview?.total ?: "0.00",style=MaterialTheme.typography.headlineMedium);Text("共 ${preview?.rows?.size ?: 0} 条记录",style=MaterialTheme.typography.bodyMedium)}
             }
-            LedgerTable(listOf("日期","工作时间","时长","单价","金额"),preview?.rows.orEmpty().map {r -> listOf(r.cells[0].substring(5).replace('-','/'),r.cells[2],r.cells[3],r.cells[5],r.cells[6])},total=preview?.total)
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("导出表格" to "xlsx","导出图片" to "png","导出 PDF" to "pdf").forEach {(label,kind) ->
-                    Button({beginExport(kind)},Modifier.weight(1f).heightIn(min=64.dp),enabled=!busy && project.isNotBlank(),contentPadding=PaddingValues(6.dp)) {Text(label)}
+            LedgerTable(listOf("日期","工作时间","时长","单价","金额"),preview?.rows.orEmpty().map {r -> listOf(r.cells[0].substring(5).replace('-','/'),r.cells[2],r.cells[3],r.cells[5],r.cells[6])},onRow={index -> rowIds.getOrNull(index)?.let(onRecord)},total=preview?.total ?: "0.00")
+            if(!historyOnly) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                listOf("导出表格" to "xlsx","导出图片" to "png","导出 PDF" to "pdf").forEachIndexed {index,(label,kind) ->
+                    val tint=listOf(Color(0xFF176D69),Color(0xFF276CB5),Color(0xFFAA4D44))[index]
+                    val background=listOf(Color(0xFFDDF1E7),Color(0xFFE3EFFB),Color(0xFFF9E7E2))[index]
+                    Card(onClick={if(!busy && project.isNotBlank() && start<=end)beginExport(kind)},modifier=Modifier.weight(1f).heightIn(min=96.dp),shape=RoundedCornerShape(12.dp),colors=CardDefaults.cardColors(containerColor=background)) {
+                        Column(Modifier.fillMaxWidth().padding(vertical=12.dp,horizontal=4.dp),horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            Image(painterResource(when(kind) {"xlsx"->R.drawable.export_sheet;"png"->R.drawable.export_image;else->R.drawable.export_pdf}),null,Modifier.size(32.dp))
+                            Text(label,fontSize=16.sp,color=tint)
+                        }
+                    }
                 }
             }
-            TextButton({editingColumns=!editingColumns}) {Text("账单列名设置 ${if(editingColumns) "⌃" else "⌄"}")}
+            if(!historyOnly) TextButton({editingColumns=!editingColumns},contentPadding=PaddingValues(horizontal=4.dp)) {Text("导出设置 ${if(editingColumns) "⌃" else "⌄"}",fontSize=14.sp)}
             if(editingColumns) {
                 columns.forEachIndexed {i,value -> TextField(defaultColumnNames[i],value,{next -> columns=columns.toMutableList().also {it[i]=next}})}
                 MainButton("保存列名",!busy) {task {
@@ -195,6 +228,7 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
         if(busy) Text("正在生成，请稍候…")
         if(message.isNotBlank()) Text(message)
     }
+    if(choosingMonth) MonthPicker(selectedMonth,{choosingMonth=false}) {next -> month=next.toString();customRange=false;choosingMonth=false}
     if(naming) AlertDialog(onDismissRequest={naming=false},title={Text("导出文件名")},text={Column {TextField("名称（无需填写扩展名）",fileBase,{fileBase=it});Text("非法字符会替换为下划线；保存时请确认系统显示的位置与文件名，避免覆盖。")}},confirmButton={TextButton({naming=false;generate(exportKind)},enabled=fileBase.isNotBlank()) {Text("生成文件")}},dismissButton={TextButton({naming=false}) {Text("取消")}})
     if(ready) AlertDialog(onDismissRequest={if(!saving) ready=false},title={Text("文件生成成功")},text={Column {Text(files.joinToString("\n") {File(it).name});if(files.size>1) Text("图片共 ${files.size} 页。保存时依次选择每一页位置；分享会发送全部 PNG 图片。")}},confirmButton={TextButton({savePage=0;saving=true},enabled=!busy && !saving) {Text("保存文件")}},dismissButton={Row {TextButton({share()},enabled=!saving) {Text("分享文件")};TextButton({ready=false},enabled=!saving) {Text("关闭")}}})
     if(restoreConfirm) AlertDialog(onDismissRequest={if(!busy)restoreConfirm=false},title={Text("确认恢复备份？")},text={Text("${incoming?.projects?.size ?: 0} 个项目\n${incoming?.activeRecords?.size ?: 0} 条有效记录\n合计 ${incoming?.total ?: ""} 元\n现有历史不覆盖；冲突时拒绝整次恢复。")},confirmButton={TextButton({val snapshot=incoming ?: return@TextButton;restoreConfirm=false;task {repo.restore(snapshot);val latest=repo.backup();withContext(Dispatchers.Main) {data=latest};"恢复成功，金额已核对。"}},enabled=!busy) {Text("确认恢复")}},dismissButton={TextButton({restoreConfirm=false}) {Text("取消")}})
