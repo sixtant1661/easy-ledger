@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun PageContent(title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null, backEnabled: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+fun PageContent(title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null, backEnabled: Boolean = true, footer: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxSize().padding(horizontal=16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical=6.dp).heightIn(min=52.dp),verticalAlignment=Alignment.CenterVertically) {
             if(onBack!=null) IconButton(onBack,enabled=backEnabled,modifier=Modifier.size(48.dp)) {Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回上一级")}
@@ -32,6 +32,7 @@ fun PageContent(title: String, modifier: Modifier = Modifier, onBack: (() -> Uni
             if(onBack!=null) Spacer(Modifier.width(48.dp))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top=4.dp,bottom=20.dp),verticalArrangement=Arrangement.spacedBy(10.dp),content=content)
+        if(footer!=null) Column(Modifier.fillMaxWidth().padding(top=8.dp,bottom=12.dp),content=footer)
     }
 }
 

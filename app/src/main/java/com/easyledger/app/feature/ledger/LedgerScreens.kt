@@ -25,6 +25,8 @@ import com.easyledger.app.domain.calculation.Money
 import com.easyledger.app.domain.model.BillingMode
 import com.easyledger.app.ui.components.InformationCard
 import com.easyledger.app.ui.components.PageContent
+import com.easyledger.app.ui.components.FoldHeader
+import com.easyledger.app.ui.components.SolidSelector
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -130,7 +132,7 @@ fun ProjectEditor(project: ProjectEntity?, model: LedgerViewModel, onBack: () ->
             TextField("单位",unit,{unit=it},modifier=Modifier.weight(.8f))
             TextField("默认单价（元）",price,{price=it},true,Modifier.weight(1.2f))
         }
-        TextButton({showNote=!showNote},contentPadding=PaddingValues(0.dp)) {Text("项目备注（选填） ${if(showNote) "⌃" else "⌄"}",fontSize=15.sp)}
+        FoldHeader("项目备注（选填）",showNote,{showNote=!showNote})
         if(showNote) TextField("备注",note,{note=it})
         Text("默认单价仅用于新记录。",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -190,20 +192,20 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
             MainButton("创建项目",!busy,onCreateProject)
         } else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
-                OutlinedButton({chooseProject=true},Modifier.fillMaxWidth().heightIn(min=52.dp),enabled=!busy,shape=RoundedCornerShape(12.dp),contentPadding=PaddingValues(horizontal=8.dp)) {Text("${available.firstOrNull {it.id==projectId}?.name ?: "选择项目"} ▾",fontSize=16.sp,maxLines=2)}
+                SolidSelector(available.firstOrNull {it.id==projectId}?.name ?: "选择项目",{chooseProject=true},Modifier.fillMaxWidth(),enabled=!busy)
                 DropdownMenu(chooseProject,{chooseProject=false}) {available.forEach {p -> DropdownMenuItem({Text(p.name)},{choose(p)})}}
             }
-            OutlinedButton({
+            SolidSelector(shortDate(date),{
                 val d=java.time.LocalDate.parse(date)
                 DatePickerDialog(context,{_,y,m,day -> changeDate(java.time.LocalDate.of(y,m+1,day).toString())},d.year,d.monthValue-1,d.dayOfMonth).show()
-            },Modifier.weight(1f).heightIn(min=52.dp),shape=RoundedCornerShape(12.dp),contentPadding=PaddingValues(horizontal=6.dp)) {Text("$date ▾",fontSize=15.sp)}
+            },Modifier.weight(1f),enabled=!busy)
         }
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
             listOf("今天" to 0,"昨天" to -1,"前天" to -2).forEach {(label,offset) ->
-                TextButton({changeDate(java.time.LocalDate.now().plusDays(offset.toLong()).toString())},Modifier.heightIn(min=40.dp),contentPadding=PaddingValues(horizontal=10.dp,vertical=4.dp)) {Text(label,fontSize=14.sp)}
+                TextButton({changeDate(java.time.LocalDate.now().plusDays(offset.toLong()).toString())},Modifier.heightIn(min=48.dp),shape=RoundedCornerShape(8.dp),colors=ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.primary),contentPadding=PaddingValues(horizontal=10.dp,vertical=2.dp)) {Text(label,fontSize=13.sp,lineHeight=18.sp,maxLines=1)}
             }
         }
-        TextButton({timeExpanded=!timeExpanded},Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("◷ 工作时间 ${if(timeExpanded) "⌃" else "⌄"}") }
+        FoldHeader("工作时间",timeExpanded,{timeExpanded=!timeExpanded})
         if(timeExpanded) {
             TimeInputs(date, spans) { next -> savedSpans=next.map { it.start+"|"+it.end }; if(next.isEmpty()) useTime=false }
             if(spans.isNotEmpty() && mode==BillingMode.HOUR.name) Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) { Checkbox(useTime,{useTime=it});Text("自动计费工时（关闭可手动调整）",fontSize=14.sp) }
@@ -215,7 +217,7 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
             Card(Modifier.weight(1f),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF5F1))) { Column(Modifier.padding(16.dp)) { Text("金额（元）");Text(amount ?: "—",style=MaterialTheme.typography.titleLarge) } }
         }
         if(amount==null) Text(calculation.exceptionOrNull()?.message ?: "请填写数量和单价",color=MaterialTheme.colorScheme.error)
-        TextButton({defaultsExpanded=!defaultsExpanded},Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text("⚙ 默认配置（单价 / 备注） ${if(defaultsExpanded) "⌃" else "⌄"}") }
+        FoldHeader("默认配置",defaultsExpanded,{defaultsExpanded=!defaultsExpanded})
         if(defaultsExpanded) {
             ModePicker(BillingMode.from(mode)) { mode=it.name;unit=it.unit;if(it!=BillingMode.HOUR)useTime=false }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {

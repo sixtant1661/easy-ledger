@@ -54,19 +54,22 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
         when(stage) {
             0 -> {
                 Box {
-                    OutlinedButton({open=true},Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text("项目：${projects.firstOrNull {it.id==projectId}?.name ?: "请选择"} ›")}
+                    SolidSelector(projects.firstOrNull {it.id==projectId}?.name ?: "选择项目",{open=true},Modifier.fillMaxWidth(),enabled=!busy)
                     DropdownMenu(open,{open=false}) {projects.filter {it.deletedAt==null}.forEach {p -> DropdownMenuItem({Text(p.name)},{projectId=p.id;mode=p.defaultMode;unit=p.defaultUnit;price=p.defaultPrice;useTime=mode==BillingMode.HOUR.name;open=false})}}
                 }
                 Text("▦ 日期范围",style=MaterialTheme.typography.titleMedium)
-                DateButton("开始日期",start) {next -> savedSpans=WorkTime.shift(spans,start,next).map {it.start+"|"+it.end};start=next;excluded=emptyList()}
-                DateButton("结束日期",end) {end=it;excluded=emptyList()}
-                TextButton({timeExpanded=!timeExpanded},Modifier.fillMaxWidth()) {Text("◷ 工作时间 ${if(timeExpanded) "⌃" else "⌄"}")}
+                val crossYear=LocalDate.parse(start).year!=LocalDate.parse(end).year
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    DateButton("开始日期",start,Modifier.weight(1f),showYear=crossYear) {next -> savedSpans=WorkTime.shift(spans,start,next).map {it.start+"|"+it.end};start=next;excluded=emptyList()}
+                    DateButton("结束日期",end,Modifier.weight(1f),showYear=crossYear) {end=it;excluded=emptyList()}
+                }
+                FoldHeader("工作时间",timeExpanded,{timeExpanded=!timeExpanded})
                 if(timeExpanded) {
                     TimeInputs(start,spans) {next -> savedSpans=next.map {it.start+"|"+it.end};if(next.isEmpty())useTime=false}
                     if(mode==BillingMode.HOUR.name && spans.isNotEmpty()) Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(useTime,{useTime=it});Text("自动计算每天计费小时")}
                 }
                 if(!useTime || mode!=BillingMode.HOUR.name) TextField("每天计费数量（$unit）",qty,{qty=it},true)
-                TextButton({defaults=!defaults},Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text("⚙ 默认配置（可单独修改） ${if(defaults) "⌃" else "⌄"}")}
+                FoldHeader("默认配置",defaults,{defaults=!defaults})
                 Text("单价 $price 元/$unit",color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if(defaults) {
                     ModePicker(BillingMode.from(mode)) {mode=it.name;unit=it.unit;if(it!=BillingMode.HOUR)useTime=false}

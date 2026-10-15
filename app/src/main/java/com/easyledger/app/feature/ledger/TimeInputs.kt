@@ -9,17 +9,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import com.easyledger.app.ui.components.SolidSelector
 import com.easyledger.app.domain.time.TimeSpan
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+fun shortDate(value: String, showYear: Boolean = false): String {
+    val d=LocalDate.parse(value)
+    return (if(showYear || d.year!=LocalDate.now().year) "${d.year}年" else "")+"${d.monthValue}月${d.dayOfMonth}日"
+}
+
 @Composable
-fun DateButton(label: String, date: String, onChange: (String) -> Unit) {
-    val context = LocalContext.current
-    OutlinedButton({
-        val d = LocalDate.parse(date)
-        DatePickerDialog(context, { _, y, m, day -> onChange(LocalDate.of(y,m+1,day).toString()) }, d.year, d.monthValue-1, d.dayOfMonth).show()
-    }, Modifier.fillMaxWidth().heightIn(min=56.dp)) { Text("$label：$date（选择日期）") }
+fun DateButton(label: String, date: String, modifier: Modifier = Modifier, showYear: Boolean = false, onChange: (String) -> Unit) {
+    val context=LocalContext.current
+    Column(modifier,verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        Text(label,fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        val d=LocalDate.parse(date)
+        val value=if(showYear || d.year!=LocalDate.now().year) "${d.year}年\n${d.monthValue}月${d.dayOfMonth}日" else shortDate(date)
+        SolidSelector(value,{
+            val d=LocalDate.parse(date)
+            DatePickerDialog(context,{_,y,m,day -> onChange(LocalDate.of(y,m+1,day).toString())},d.year,d.monthValue-1,d.dayOfMonth).show()
+        },Modifier.fillMaxWidth(),maxLines=Int.MAX_VALUE)
+    }
 }
 
 @Composable

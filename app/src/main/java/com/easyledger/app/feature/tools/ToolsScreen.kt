@@ -172,33 +172,8 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
     }}
     val preview=remember(selectedData,project,start,end,columns) {selectedData?.takeIf {project.isNotBlank()}?.let {runCatching {Settlements.create(it,project,start,end,columns)}.getOrNull()}}
     val rowIds=selectedData?.activeRecords.orEmpty().sortedWith(compareBy({it.date},{it.createdAt},{it.id})).map {it.id}
-    PageContent(if(backupOnly) "备份与恢复" else if(historyOnly) "历史记录" else if(customRange) "自定义账单" else "${selectedMonth.year}年${selectedMonth.monthValue}月账单",modifier,onBack=onBack,backEnabled=!busy && !saving) {
-        if(!backupOnly) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.weight(1f)) {
-                    TextButton({choice=true},Modifier.fillMaxWidth().heightIn(min=48.dp),enabled=!busy,contentPadding=PaddingValues(horizontal=4.dp)) {Text("${data?.projects?.firstOrNull {it.id==project}?.name ?: "选择项目"} ▾",maxLines=2,overflow=TextOverflow.Ellipsis)}
-                    DropdownMenu(choice,{choice=false}) {data?.projects?.forEach {p -> DropdownMenuItem({Text(p.name)},{project=p.id;choice=false})}}
-                }
-                TextButton({choosingMonth=true},Modifier.heightIn(min=48.dp),enabled=!busy,contentPadding=PaddingValues(horizontal=4.dp)) {Text(if(customRange) "自定义日期 ▾" else "${selectedMonth.year}年${selectedMonth.monthValue}月 ▾",fontSize=16.sp)}
-            }
-            TextButton({showDates=!showDates},Modifier.heightIn(min=40.dp),contentPadding=PaddingValues(horizontal=4.dp)) {Text("高级日期筛选 ${if(showDates) "⌃" else "⌄"}",fontSize=14.sp)}
-            if(showDates) {
-                Row {
-                    TextButton({month=selectedMonth.minusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("‹ 上个月")}
-                    TextButton({month=selectedMonth.plusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("下个月 ›")}
-                }
-                DateButton("开始日期",start) {rangeStart=it;if(!customRange)rangeEnd=end;customRange=true}
-                DateButton("结束日期",end) {rangeEnd=it;if(!customRange)rangeStart=start;customRange=true}
-                if(customRange) TextButton({customRange=false}) {Text("恢复所选月份")}
-            }
-            if(customRange) Text("$start 至 $end",fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            if(start>end) Text("结束日期不能早于开始日期，请调整日期范围。",fontSize=14.sp,color=MaterialTheme.colorScheme.error)
-            if(historyOnly) SearchField(keyword,{keyword=it},"搜索项目名称或备注")
-            Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF4F1))) {
-                Column(Modifier.padding(16.dp)) {Text("累计金额（元）");Text(preview?.total ?: "0.00",style=MaterialTheme.typography.headlineMedium);Text("共 ${preview?.rows?.size ?: 0} 条记录",style=MaterialTheme.typography.bodyMedium)}
-            }
-            LedgerTable(listOf("日期","工作时间","时长","单价","金额"),preview?.rows.orEmpty().map {r -> listOf(r.cells[0].substring(5).replace('-','/'),r.cells[2],r.cells[3],r.cells[5],r.cells[6])},onRow={index -> rowIds.getOrNull(index)?.let(onRecord)},total=preview?.total ?: "0.00")
-            if(!historyOnly) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+    val exportFooter: @Composable ColumnScope.() -> Unit = {
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                 listOf("导出表格" to "xlsx","导出图片" to "png","导出 PDF" to "pdf").forEachIndexed {index,(label,kind) ->
                     val tint=listOf(Color(0xFF176D69),Color(0xFF276CB5),Color(0xFFAA4D44))[index]
                     val background=listOf(Color(0xFFDDF1E7),Color(0xFFE3EFFB),Color(0xFFF9E7E2))[index]
@@ -210,7 +185,37 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
                     }
                 }
             }
-            if(!historyOnly) TextButton({editingColumns=!editingColumns},contentPadding=PaddingValues(horizontal=4.dp)) {Text("导出设置 ${if(editingColumns) "⌃" else "⌄"}",fontSize=14.sp)}
+    }
+    PageContent(if(backupOnly) "备份与恢复" else if(historyOnly) "历史记录" else "账本",modifier,onBack=onBack,backEnabled=!busy && !saving,footer=if(!backupOnly && !historyOnly) exportFooter else null) {
+        if(!backupOnly) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.weight(1f)) {
+                    SolidSelector(data?.projects?.firstOrNull {it.id==project}?.name ?: "选择项目",{choice=true},Modifier.fillMaxWidth(),enabled=!busy)
+                    DropdownMenu(choice,{choice=false}) {data?.projects?.forEach {p -> DropdownMenuItem({Text(p.name)},{project=p.id;choice=false})}}
+                }
+                SolidSelector(if(customRange) "自定义日期" else "${selectedMonth.year}年${selectedMonth.monthValue}月",{choosingMonth=true},Modifier.weight(1f),enabled=!busy)
+            }
+            FoldHeader("高级日期筛选",showDates,{showDates=!showDates})
+            if(showDates) {
+                Row {
+                    TextButton({month=selectedMonth.minusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("‹ 上个月")}
+                    TextButton({month=selectedMonth.plusMonths(1).toString();customRange=false},Modifier.weight(1f)) {Text("下个月 ›")}
+                }
+                val crossYear=LocalDate.parse(start).year!=LocalDate.parse(end).year
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    DateButton("开始日期",start,Modifier.weight(1f),showYear=crossYear) {rangeStart=it;if(!customRange)rangeEnd=end;customRange=true}
+                    DateButton("结束日期",end,Modifier.weight(1f),showYear=crossYear) {rangeEnd=it;if(!customRange)rangeStart=start;customRange=true}
+                }
+                if(customRange) TextButton({customRange=false}) {Text("恢复所选月份")}
+            }
+            if(customRange) Text("$start 至 $end",fontSize=14.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(start>end) Text("结束日期不能早于开始日期，请调整日期范围。",fontSize=14.sp,color=MaterialTheme.colorScheme.error)
+            if(historyOnly) SearchField(keyword,{keyword=it},"搜索项目名称或备注")
+            Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=androidx.compose.ui.graphics.Color(0xFFEAF4F1))) {
+                Column(Modifier.padding(16.dp)) {Text("累计金额（元）");Text(preview?.total ?: "0.00",style=MaterialTheme.typography.headlineMedium);Text("共 ${preview?.rows?.size ?: 0} 条记录",style=MaterialTheme.typography.bodyMedium)}
+            }
+            LedgerTable(listOf("日期","工作时间","时长","单价","金额"),preview?.rows.orEmpty().map {r -> listOf(r.cells[0].substring(5).replace('-','/'),r.cells[2],r.cells[3],r.cells[5],r.cells[6])},onRow={index -> rowIds.getOrNull(index)?.let(onRecord)},total=preview?.total ?: "0.00")
+            if(!historyOnly) FoldHeader("导出设置",editingColumns,{editingColumns=!editingColumns})
             if(editingColumns) {
                 columns.forEachIndexed {i,value -> TextField(defaultColumnNames[i],value,{next -> columns=columns.toMutableList().also {it[i]=next}})}
                 MainButton("保存列名",!busy) {task {
