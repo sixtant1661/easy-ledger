@@ -172,7 +172,7 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
     }}
     val preview=remember(selectedData,project,start,end,columns) {selectedData?.takeIf {project.isNotBlank()}?.let {runCatching {Settlements.create(it,project,start,end,columns)}.getOrNull()}}
     val rowIds=selectedData?.activeRecords.orEmpty().sortedWith(compareBy({it.date},{it.createdAt},{it.id})).map {it.id}
-    PageContent(if(backupOnly) "备份与恢复" else if(historyOnly) "历史记录" else if(customRange) "自定义账单" else "${selectedMonth.year}年${selectedMonth.monthValue}月账单",modifier) {
+    PageContent(if(backupOnly) "备份与恢复" else if(historyOnly) "历史记录" else if(customRange) "自定义账单" else "${selectedMonth.year}年${selectedMonth.monthValue}月账单",modifier,onBack=onBack,backEnabled=!busy && !saving) {
         if(!backupOnly) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.weight(1f)) {
@@ -223,7 +223,6 @@ fun ToolsScreen(onBack: () -> Unit, modifier: Modifier = Modifier, backupOnly: B
             MainButton("保存本地备份",!busy) {beginExport("backup")}
             MainButton("选择备份并恢复",!busy) {open.launch(arrayOf("application/json","text/plain","application/octet-stream"))}
             Text("恢复保留已有记录；冲突时整次拒绝，不覆盖、不清库。备份未加密，请保存到私人位置并另留一份。")
-            OutlinedButton(onBack,Modifier.fillMaxWidth().heightIn(min=56.dp),enabled=!busy) {Text("返回")}
         }
         if(busy) Text("正在生成，请稍候…")
         if(message.isNotBlank()) Text(message)

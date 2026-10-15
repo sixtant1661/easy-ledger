@@ -50,7 +50,7 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
     val total=amount.getOrNull()?.let {Money.total(List(selected.size) {_ -> it})} ?: "—"
     LaunchedEffect(projects.map {it.id}) {if(projectId.isBlank()) projects.firstOrNull {it.deletedAt==null}?.let {projectId=it.id;mode=it.defaultMode;unit=it.defaultUnit;price=it.defaultPrice;useTime=mode==BillingMode.HOUR.name}}
     val valid=!busy && projectId.isNotBlank() && unit.isNotBlank() && range.isSuccess && amount.isSuccess && minutes.isSuccess && selected.isNotEmpty()
-    PageContent(when(stage) {0->"批量增加";1->"批量增加 · 预览";else->"添加完成"},modifier) {
+    PageContent(when(stage) {0->"批量增加";1->"批量增加 · 预览";else->"添加完成"},modifier,onBack={if(stage==1)stage=0 else if(stage==2)onBack() else exit()},backEnabled=!busy) {
         when(stage) {
             0 -> {
                 Box {
@@ -109,7 +109,6 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
                     val count=selected.size;val finalTotal=total
                     model.saveBatch(projectId,selected,BillingMode.from(mode),unit,billed,price,note,spans,start,useTime,batchId) {savedCount=count;savedTotal=finalTotal;stage=2}
                 }
-                OutlinedButton({stage=0},Modifier.fillMaxWidth().heightIn(min=56.dp),enabled=!busy) {Text("上一步")}
             }
             else -> {
                 Spacer(Modifier.height(40.dp))
@@ -118,7 +117,6 @@ fun BatchScreen(model: LedgerViewModel, onBack: () -> Unit, modifier: Modifier =
                 Text("总金额：¥ $savedTotal",Modifier.fillMaxWidth(),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(Modifier.height(32.dp))
                 MainButton("查看新增记录",onClick=onHistory)
-                OutlinedButton(onBack,Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text("返回首页")}
             }
         }
     }

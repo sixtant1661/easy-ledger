@@ -121,7 +121,7 @@ fun ProjectEditor(project: ProjectEntity?, model: LedgerViewModel, onBack: () ->
     val busy by model.busy.collectAsStateWithLifecycle()
     val exit = rememberExitGuard(onBack, busy)
     var showNote by rememberSaveable {mutableStateOf(project?.note?.isNotBlank()==true)}
-    PageContent(if (project == null) "创建项目" else "修改项目", modifier) {
+    PageContent(if (project == null) "创建项目" else "修改项目", modifier,onBack=exit,backEnabled=!busy) {
         Text("基本信息",style=MaterialTheme.typography.titleMedium)
         TextField("项目名称", name, { name = it })
         Text("计费设置",style=MaterialTheme.typography.titleMedium)
@@ -184,7 +184,7 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
         chooseProject = false
     }
     LaunchedEffect(available.map { it.id }) { if(projectId.isBlank() && available.isNotEmpty()) choose(available.first()) }
-    PageContent(if (record == null) "新增工作记录" else "修改工作记录", modifier) {
+    PageContent(if (record == null) "新增工作记录" else "修改工作记录", modifier,onBack=exit,backEnabled=!busy) {
         if(available.isEmpty()) {
             Text("请先创建一个工作项目。")
             MainButton("创建项目",!busy,onCreateProject)
@@ -244,12 +244,11 @@ fun RecordEditor(record: WorkRecordEntity?, model: LedgerViewModel, onCreateProj
 fun RecordDetail(item: RecordWithProject, model: LedgerViewModel, onEdit: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier, spans: List<TimeSpan> = emptyList()) {
     val busy by model.busy.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf(false) }
-    PageContent("记录详情", modifier) {
+    PageContent("记录详情", modifier,onBack=onBack,backEnabled=!busy) {
         InformationCard(item.projectName, "日期：${item.record.date}\n计费：${BillingMode.from(item.record.mode).label}\n数量：${item.record.quantity} ${item.record.unit}\n单价：${item.record.unitPrice} 元\n金额：${item.record.amount} 元\n备注：${item.record.note.ifBlank { "无" }}")
         if(spans.isNotEmpty()) InformationCard("原始时间段", spans.joinToString("\n") { "${it.start.replace('T',' ')}–${it.end.replace('T',' ')}" } + "\n实际 ${item.record.actualMinutes} 分钟；计费数量独立保存。")
         MainButton("修改记录", !busy, onEdit)
         OutlinedButton({ deleting = true }, Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = !busy) { Text("删除记录") }
-        TextButton(onBack, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("返回历史记录") }
     }
     if (deleting) ConfirmDelete("删除这条记录？", "此记录将从历史列表中移除，请仔细确认。", busy, { deleting = false }, { model.deleteRecord(item.record.id, onBack) })
 }
